@@ -240,15 +240,17 @@ class ImportQuestionsDialog(ctk.CTkToplevel):
 
     def _browse_file(self):
         filetypes = [
-            ("Tệp trắc nghiệm (*.docx, *.txt)", "*.docx;*.txt"),
-            ("Microsoft Word Document (*.docx)", "*.docx"),
-            ("Văn bản thuần (*.txt)", "*.txt"),
-            ("Tất cả tệp", "*.*")
+            ("Tất cả tệp trắc nghiệm (*.docx, *.txt)", ("*.docx", "*.DOCX", "*.txt", "*.TXT")),
+            ("Microsoft Word Document (*.docx)", ("*.docx", "*.DOCX")),
+            ("Văn bản thuần (*.txt)", ("*.txt", "*.TXT")),
+            ("Tất cả tệp (*.*)", "*")
         ]
+        initial_dir = "/home/khoile/Documents/QuizApp/database" if os.path.exists("/home/khoile/Documents/QuizApp/database") else None
         chosen = filedialog.askopenfilename(
             parent=self,
             title="Chọn file chứa câu hỏi trắc nghiệm",
-            filetypes=filetypes
+            filetypes=filetypes,
+            initialdir=initial_dir
         )
         if not chosen:
             return
