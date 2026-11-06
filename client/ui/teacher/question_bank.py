@@ -22,6 +22,7 @@ class QuestionDialog(ctk.CTkToplevel):
         token: str,
         subjects: List[Dict[str, Any]],
         question_data: Optional[Dict[str, Any]] = None,
+        initial_subject_id: Optional[int] = None,
         on_save_success=None
     ):
         super().__init__(parent)
@@ -29,6 +30,7 @@ class QuestionDialog(ctk.CTkToplevel):
         self.token = token
         self.subjects = subjects
         self.question_data = question_data
+        self.initial_subject_id = initial_subject_id
         self.on_save_success = on_save_success
         self.is_edit = question_data is not None
 
@@ -169,6 +171,11 @@ class QuestionDialog(ctk.CTkToplevel):
                 if sid == subj_id:
                     self.subj_var.set(name)
                     break
+        elif self.initial_subject_id:
+            for name, sid in self.subject_map.items():
+                if sid == self.initial_subject_id:
+                    self.subj_var.set(name)
+                    break
 
     def _save_question(self):
         content = self.content_text.get("1.0", "end-1c").strip()
@@ -236,7 +243,8 @@ class QuestionDialog(ctk.CTkToplevel):
 
 class QuestionBankPanel(ctk.CTkFrame):
     """
-    Teacher panel for managing quiz questions: filter by subject & difficulty, CRUD questions.
+    Teacher panel for managing quiz questions organized by Subject Bank.
+    Each subject has its own dedicated, isolated question bank.
     """
 
     def __init__(self, master, connection: ServerConnection, token: str, **kwargs):
@@ -245,69 +253,84 @@ class QuestionBankPanel(ctk.CTkFrame):
         self.token = token
         self.questions_cache: List[Dict[str, Any]] = []
         self.subjects_cache: List[Dict[str, Any]] = []
+        self.selected_subject_id: Optional[int] = None
 
         self._build_ui()
         self.refresh_data()
 
     def _build_ui(self):
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         # 1. Title bar
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, padx=20, pady=(15, 10), sticky="ew")
+        header.grid(row=0, column=0, padx=20, pady=(15, 8), sticky="ew")
         header.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             header,
-            text="📝 Ngân hàng Câu hỏi",
+            text="📝 Ngân hàng Câu hỏi theo Môn",
             font=("Helvetica", 20, "bold")
         ).grid(row=0, column=0, sticky="w")
 
-        # 2. Filter & Action Toolbar
+        # 2. Subject Bank Selector & Bank Summary Banner
+        bank_banner = ctk.CTkFrame(self, corner_radius=8)
+        bank_banner.grid(row=1, column=0, padx=20, pady=(0, 8), sticky="ew")
+        bank_banner.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            bank_banner,
+            text="🏦 Chọn Ngân hàng:",
+            font=("Helvetica", 13, "bold")
+        ).grid(row=0, column=0, padx=(15, 10), pady=(10, 6), sticky="w")
+
+        # Segmented Button to switch between Subject Banks
+        self.subj_segmented = ctk.CTkSegmentedButton(
+            bank_banner,
+            values=["Đang tải..."],
+            command=self._on_subject_tab_changed,
+            height=34
+        )
+        self.subj_segmented.grid(row=0, column=1, padx=(0, 15), pady=(10, 6), sticky="ew")
+
+        # Bank Statistics Banner
+        self.bank_stats_label = ctk.CTkLabel(
+            bank_banner,
+            text="Đang tải dữ liệu...",
+            font=("Helvetica", 11),
+            text_color="gray60"
+        )
+        self.bank_stats_label.grid(row=1, column=0, columnspan=2, padx=15, pady=(0, 8), sticky="w")
+
+        # 3. Filter & Action Toolbar
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
-        toolbar.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        toolbar.grid(row=2, column=0, padx=20, pady=(0, 8), sticky="ew")
         toolbar.grid_columnconfigure(0, weight=1)
 
-        # Left filter section
+        # Left filter section: Search & Difficulty filter
         filter_box = ctk.CTkFrame(toolbar, fg_color="transparent")
         filter_box.grid(row=0, column=0, sticky="w")
 
-        # Search field
         self.search_entry = ctk.CTkEntry(
             filter_box,
             placeholder_text="🔍 Tìm nội dung câu hỏi...",
-            width=220,
+            width=240,
             height=34
         )
         self.search_entry.grid(row=0, column=0, padx=(0, 8))
         self.search_entry.bind("<KeyRelease>", lambda e: self._apply_filter())
 
-        # Subject filter
-        self.subj_filter_var = ctk.StringVar(value="Tất cả môn")
-        self.subj_filter_menu = ctk.CTkOptionMenu(
-            filter_box,
-            values=["Tất cả môn"],
-            variable=self.subj_filter_var,
-            command=lambda v: self._apply_filter(),
-            width=150,
-            height=34
-        )
-        self.subj_filter_menu.grid(row=0, column=1, padx=(0, 8))
-
-        # Difficulty filter
         self.diff_filter_var = ctk.StringVar(value="Tất cả độ khó")
         self.diff_filter_menu = ctk.CTkOptionMenu(
             filter_box,
             values=["Tất cả độ khó", "EASY", "MEDIUM", "HARD"],
             variable=self.diff_filter_var,
             command=lambda v: self._apply_filter(),
-            width=130,
+            width=140,
             height=34
         )
-        self.diff_filter_menu.grid(row=0, column=2, padx=(0, 8))
+        self.diff_filter_menu.grid(row=0, column=1, padx=(0, 8))
 
-        # Refresh button
         self.refresh_btn = ctk.CTkButton(
             filter_box,
             text="🔄",
@@ -317,7 +340,7 @@ class QuestionBankPanel(ctk.CTkFrame):
             hover_color="gray30",
             command=self.refresh_data
         )
-        self.refresh_btn.grid(row=0, column=3)
+        self.refresh_btn.grid(row=0, column=2)
 
         # Right Action Buttons
         btn_box = ctk.CTkFrame(toolbar, fg_color="transparent")
@@ -336,8 +359,8 @@ class QuestionBankPanel(ctk.CTkFrame):
 
         self.add_btn = ctk.CTkButton(
             btn_box,
-            text="➕ Thêm thủ công",
-            width=115,
+            text="➕ Thêm câu hỏi",
+            width=120,
             height=34,
             fg_color=SUCCESS_COLOR,
             hover_color="#218838",
@@ -367,13 +390,13 @@ class QuestionBankPanel(ctk.CTkFrame):
         )
         self.delete_btn.grid(row=0, column=3)
 
-        # 3. Treeview Table
+        # 4. Treeview Table (Dedicated to the selected subject bank - NO redundant "Môn học" column!)
         table_frame = ctk.CTkFrame(self, corner_radius=8)
-        table_frame.grid(row=2, column=0, padx=20, pady=(0, 15), sticky="nsew")
+        table_frame.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="nsew")
         table_frame.grid_rowconfigure(0, weight=1)
         table_frame.grid_columnconfigure(0, weight=1)
 
-        columns = ("id", "subject", "content", "diff", "correct")
+        columns = ("stt", "id", "content", "diff", "correct")
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
@@ -383,15 +406,15 @@ class QuestionBankPanel(ctk.CTkFrame):
         style = ttk.Style()
         style_treeview(style)
 
+        self.tree.heading("stt", text="#")
         self.tree.heading("id", text="ID")
-        self.tree.heading("subject", text="Môn học")
         self.tree.heading("content", text="Nội dung câu hỏi")
         self.tree.heading("diff", text="Độ khó")
         self.tree.heading("correct", text="Đáp án")
 
-        self.tree.column("id", width=50, anchor="center")
-        self.tree.column("subject", width=160, anchor="w")
-        self.tree.column("content", width=550, anchor="w")
+        self.tree.column("stt", width=45, anchor="center")
+        self.tree.column("id", width=55, anchor="center")
+        self.tree.column("content", width=680, anchor="w")
         self.tree.column("diff", width=100, anchor="center")
         self.tree.column("correct", width=80, anchor="center")
 
@@ -403,14 +426,21 @@ class QuestionBankPanel(ctk.CTkFrame):
 
         self.tree.bind("<Double-1>", lambda event: self._open_edit_dialog())
 
-        # 4. Status Bar
+        # 5. Status Bar
         self.status_label = ctk.CTkLabel(
             self,
             text="Đang tải ngân hàng câu hỏi...",
             font=("Helvetica", 11),
             text_color="gray60"
         )
-        self.status_label.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="w")
+        self.status_label.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="w")
+
+    def _on_subject_tab_changed(self, tab_text):
+        for s in self.subjects_cache:
+            if s.get("name") == tab_text:
+                self.selected_subject_id = s.get("id")
+                break
+        self._apply_filter()
 
     def refresh_data(self):
         self.status_label.configure(text="Đang làm mới câu hỏi...")
@@ -433,9 +463,24 @@ class QuestionBankPanel(ctk.CTkFrame):
 
         if s_resp and s_resp.get("status") == "SUCCESS":
             self.subjects_cache = s_resp.get("data") or []
-            # Update subject dropdown in filter
-            names = ["Tất cả môn"] + [s.get("name") for s in self.subjects_cache if s.get("name")]
-            self.subj_filter_menu.configure(values=names)
+
+        subj_names = [s.get("name") for s in self.subjects_cache if s.get("name")]
+        if not subj_names:
+            subj_names = ["-- Chưa có môn học --"]
+
+        current_subj_name = None
+        for s in self.subjects_cache:
+            if s.get("id") == self.selected_subject_id:
+                current_subj_name = s.get("name")
+                break
+
+        if not current_subj_name and self.subjects_cache:
+            self.selected_subject_id = self.subjects_cache[0].get("id")
+            current_subj_name = self.subjects_cache[0].get("name")
+
+        self.subj_segmented.configure(values=subj_names)
+        if current_subj_name:
+            self.subj_segmented.set(current_subj_name)
 
         self._apply_filter()
 
@@ -445,39 +490,54 @@ class QuestionBankPanel(ctk.CTkFrame):
 
     def _apply_filter(self):
         query = self.search_entry.get().strip().lower()
-        sel_subj = self.subj_filter_var.get()
         sel_diff = self.diff_filter_var.get()
 
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        subj_lookup = {s.get("id"): s.get("name") for s in self.subjects_cache}
+        current_subj = None
+        for s in self.subjects_cache:
+            if s.get("id") == self.selected_subject_id:
+                current_subj = s
+                break
+
+        current_name = current_subj.get("name") if current_subj else "Chưa chọn môn"
+
+        # Strictly filter by currently selected subject bank
+        bank_questions = [
+            q for q in self.questions_cache
+            if q.get("subject_id") == self.selected_subject_id
+        ]
+
+        c_easy = sum(1 for q in bank_questions if q.get("difficulty") == "EASY")
+        c_med = sum(1 for q in bank_questions if q.get("difficulty") == "MEDIUM")
+        c_hard = sum(1 for q in bank_questions if q.get("difficulty") == "HARD")
+
+        self.bank_stats_label.configure(
+            text=f"📂 Đang mở: {current_name}   •   Tổng số: {len(bank_questions)} câu hỏi   (🟢 {c_easy} Dễ   •   🟡 {c_med} Trung bình   •   🔴 {c_hard} Khó)"
+        )
 
         count = 0
-        for q in self.questions_cache:
+        for idx, q in enumerate(bank_questions, 1):
             content = str(q.get("content", "")).lower()
             diff = str(q.get("difficulty", "MEDIUM"))
-            subj_name = q.get("subject_name") or subj_lookup.get(q.get("subject_id"), "-")
 
             if query and query not in content:
-                continue
-            if sel_subj != "Tất cả môn" and subj_name != sel_subj:
                 continue
             if sel_diff != "Tất cả độ khó" and diff != sel_diff:
                 continue
 
-            # Preview first 80 characters of content
             preview = q.get("content", "").replace("\n", " ")
-            if len(preview) > 80:
-                preview = preview[:77] + "..."
+            if len(preview) > 90:
+                preview = preview[:87] + "..."
 
             self.tree.insert(
                 "",
                 "end",
                 iid=str(q.get("id")),
                 values=(
+                    idx,
                     q.get("id"),
-                    subj_name,
                     preview,
                     diff,
                     q.get("correct_answer", "A")
@@ -485,7 +545,7 @@ class QuestionBankPanel(ctk.CTkFrame):
             )
             count += 1
 
-        self.status_label.configure(text=f"Hiển thị {count}/{len(self.questions_cache)} câu hỏi")
+        self.status_label.configure(text=f"Hiển thị {count}/{len(bank_questions)} câu hỏi trong ngân hàng môn '{current_name}'")
 
     def _get_selected_question(self) -> Optional[Dict[str, Any]]:
         selected = self.tree.selection()
@@ -498,19 +558,12 @@ class QuestionBankPanel(ctk.CTkFrame):
         return None
 
     def _open_import_dialog(self):
-        selected_subj = self.subj_filter_var.get()
-        init_id = None
-        for s in self.subjects_cache:
-            if s.get("name") == selected_subj:
-                init_id = s.get("id")
-                break
-
         ImportQuestionsDialog(
             self,
             self.connection,
             self.token,
             subjects=self.subjects_cache,
-            initial_subject_id=init_id,
+            initial_subject_id=self.selected_subject_id,
             on_import_success=self.refresh_data
         )
 
@@ -521,6 +574,7 @@ class QuestionBankPanel(ctk.CTkFrame):
             self.token,
             subjects=self.subjects_cache,
             question_data=None,
+            initial_subject_id=self.selected_subject_id,
             on_save_success=self.refresh_data
         )
 
@@ -535,6 +589,7 @@ class QuestionBankPanel(ctk.CTkFrame):
             self.token,
             subjects=self.subjects_cache,
             question_data=question,
+            initial_subject_id=self.selected_subject_id,
             on_save_success=self.refresh_data
         )
 
@@ -546,7 +601,7 @@ class QuestionBankPanel(ctk.CTkFrame):
 
         confirm = ask_yes_no(
             "Xác nhận xóa câu hỏi",
-            f"Bạn có chắc muốn xóa câu hỏi #{question.get('id')}?",
+            f"Bạn có chắc muốn xóa câu hỏi #{question.get('id')} khỏi ngân hàng này?",
             parent=self
         )
         if not confirm:

@@ -118,7 +118,7 @@ INSERT INTO users (username, password, full_name, email, role) VALUES
 -- Môn học mẫu
 INSERT INTO subjects (name, description, teacher_id) VALUES
 ('Lập trình Python', 'Môn học về ngôn ngữ lập trình Python cơ bản và nâng cao', 2),
-('Mạng máy tính', 'Kiến thức nền tảng về mạng máy tính và giao thức TCP/IP', 3),
+('Mạng máy tính', 'Kiến thức nền tảng về mạng máy tính và giao thức TCP/IP', 2),
 ('Cơ sở dữ liệu', 'Thiết kế và quản lý cơ sở dữ liệu quan hệ với SQL', 2);
 
 -- Câu hỏi mẫu - Lập trình Python
