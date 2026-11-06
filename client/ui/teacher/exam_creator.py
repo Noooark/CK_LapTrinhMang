@@ -14,6 +14,309 @@ from client.ui.utils import (
 from common.parser import QuestionParser
 
 
+class ViewExamDialog(ctk.CTkToplevel):
+    """
+    Dialog for viewing exam details and all its questions with answer keys.
+    """
+
+    def __init__(
+        self,
+        parent,
+        connection: ServerConnection,
+        token: str,
+        exam_data: Dict[str, Any],
+        subjects: Optional[List[Dict[str, Any]]] = None
+    ):
+        super().__init__(parent)
+        self.connection = connection
+        self.token = token
+        self.exam_data = exam_data
+        self.subjects = subjects or []
+        self.questions: List[Dict[str, Any]] = []
+
+        exam_title = exam_data.get("title", f"Đề thi #{exam_data.get('id')}")
+        self.title(f"Chi tiết Đề thi: {exam_title}")
+        self.geometry("860x720")
+        self.minsize(680, 520)
+        self.resizable(True, True)
+        self.transient(parent)
+        self.lift()
+        self.focus_force()
+        self.after(100, self._safe_grab)
+
+        self._build_ui()
+        self._load_questions()
+
+    def _safe_grab(self):
+        try:
+            if self.winfo_exists():
+                self.grab_set()
+        except Exception:
+            pass
+
+    def _build_ui(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        # 1. Header Banner
+        header = ctk.CTkFrame(self, corner_radius=10)
+        header.grid(row=0, column=0, padx=20, pady=(15, 10), sticky="ew")
+        header.grid_columnconfigure(0, weight=1)
+
+        top_row = ctk.CTkFrame(header, fg_color="transparent")
+        top_row.grid(row=0, column=0, padx=15, pady=(12, 6), sticky="ew")
+        top_row.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            top_row,
+            text=f"📋 {self.exam_data.get('title')}",
+            font=("Helvetica", 17, "bold")
+        ).grid(row=0, column=0, sticky="w")
+
+        # Export Word button
+        ctk.CTkButton(
+            top_row,
+            text="📥 Xuất Word (.docx)",
+            width=140,
+            height=32,
+            fg_color="#17a2b8",
+            hover_color="#138496",
+            command=self._export_to_docx
+        ).grid(row=0, column=1, sticky="e")
+
+        # Badges row
+        info_row = ctk.CTkFrame(header, fg_color="transparent")
+        info_row.grid(row=1, column=0, padx=15, pady=(0, 12), sticky="w")
+
+        subj_name = self.exam_data.get("subject_name") or "Chưa rõ"
+        duration = self.exam_data.get("duration_minutes", 30)
+        total_q = self.exam_data.get("total_questions", 0)
+        status = self.exam_data.get("status", "DRAFT")
+
+        status_colors = {
+            "DRAFT": ("#ffc107", "black"),
+            "ACTIVE": ("#28a745", "white"),
+            "ENDED": ("#6c757d", "white")
+        }
+        bg_col, fg_col = status_colors.get(status, ("gray50", "white"))
+
+        ctk.CTkLabel(
+            info_row,
+            text=f"Môn học: {subj_name}   |   Thời gian: {duration} phút   |   Số lượng: {total_q} câu hỏi   |   Trạng thái: ",
+            font=("Helvetica", 12)
+        ).pack(side="left")
+
+        status_badge = ctk.CTkLabel(
+            info_row,
+            text=f" {status} ",
+            font=("Helvetica", 11, "bold"),
+            fg_color=bg_col,
+            text_color=fg_col,
+            corner_radius=6
+        )
+        status_badge.pack(side="left")
+
+        # 2. Scrollable container for question cards
+        self.scroll_frame = ctk.CTkScrollableFrame(self)
+        self.scroll_frame.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="nsew")
+        self.scroll_frame.grid_columnconfigure(0, weight=1)
+
+        self.loading_label = ctk.CTkLabel(
+            self.scroll_frame,
+            text="⏳ Đang tải nội dung câu hỏi trong đề thi...",
+            font=("Helvetica", 13)
+        )
+        self.loading_label.pack(pady=40)
+
+        # 3. Bottom Button Bar
+        btn_bar = ctk.CTkFrame(self, fg_color="transparent")
+        btn_bar.grid(row=2, column=0, padx=20, pady=(5, 15), sticky="ew")
+        btn_bar.grid_columnconfigure(0, weight=1)
+
+        self.count_label = ctk.CTkLabel(
+            btn_bar,
+            text="",
+            font=("Helvetica", 12, "bold"),
+            text_color="gray60"
+        )
+        self.count_label.grid(row=0, column=0, sticky="w")
+
+        ctk.CTkButton(
+            btn_bar,
+            text="Đóng",
+            width=100,
+            height=36,
+            fg_color="gray50",
+            hover_color="gray40",
+            command=self.destroy
+        ).grid(row=0, column=1, sticky="e")
+
+    def _load_questions(self):
+        def worker():
+            try:
+                resp = self.connection.send_request(
+                    "GET_EXAM_QUESTIONS",
+                    data={"exam_id": self.exam_data["id"]},
+                    token=self.token
+                )
+                self.after(0, lambda: self._on_questions_loaded(resp))
+            except Exception as e:
+                self.after(0, lambda: self._on_load_error(str(e)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_questions_loaded(self, resp):
+        self.loading_label.pack_forget()
+        if not resp or resp.get("status") != "SUCCESS":
+            err_msg = resp.get("message", "Không thể tải câu hỏi") if resp else "Lỗi kết nối máy chủ"
+            ctk.CTkLabel(
+                self.scroll_frame,
+                text=f"❌ {err_msg}",
+                font=("Helvetica", 13),
+                text_color=DANGER_COLOR
+            ).pack(pady=30)
+            return
+
+        self.questions = resp.get("data") or []
+        if not self.questions:
+            ctk.CTkLabel(
+                self.scroll_frame,
+                text="ℹ️ Đề thi này hiện chưa có câu hỏi nào.",
+                font=("Helvetica", 13),
+                text_color="gray60"
+            ).pack(pady=40)
+            return
+
+        self.count_label.configure(text=f"Tổng số: {len(self.questions)} câu hỏi")
+
+        for idx, q in enumerate(self.questions, 1):
+            self._render_question_card(idx, q)
+
+    def _render_question_card(self, idx: int, q: Dict[str, Any]):
+        card = ctk.CTkFrame(self.scroll_frame, corner_radius=8, fg_color=("gray92", "gray17"))
+        card.pack(fill="x", pady=6, padx=4)
+        card.grid_columnconfigure(0, weight=1)
+
+        # Header of card
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.pack(fill="x", padx=12, pady=(10, 4))
+        top.grid_columnconfigure(0, weight=1)
+
+        order_num = q.get("order_number") or idx
+        ctk.CTkLabel(
+            top,
+            text=f"Câu {order_num}:",
+            font=("Helvetica", 13, "bold")
+        ).grid(row=0, column=0, sticky="w")
+
+        diff = q.get("difficulty", "MEDIUM")
+        diff_colors = {
+            "EASY": ("#d4edda", "#155724"),
+            "MEDIUM": ("#fff3cd", "#856404"),
+            "HARD": ("#f8d7da", "#721c24")
+        }
+        diff_bg, diff_fg = diff_colors.get(diff, ("gray80", "black"))
+
+        ctk.CTkLabel(
+            top,
+            text=f" {diff} ",
+            font=("Helvetica", 10, "bold"),
+            fg_color=diff_bg,
+            text_color=diff_fg,
+            corner_radius=4
+        ).grid(row=0, column=1, sticky="e")
+
+        # Question Content
+        ctk.CTkLabel(
+            card,
+            text=q.get("content", ""),
+            font=("Helvetica", 13),
+            justify="left",
+            anchor="w",
+            wraplength=760
+        ).pack(fill="x", padx=14, pady=(2, 8))
+
+        # Choices A, B, C, D
+        correct = str(q.get("correct_answer", "")).upper()
+        options = [
+            ("A", q.get("option_a", "")),
+            ("B", q.get("option_b", "")),
+            ("C", q.get("option_c", "")),
+            ("D", q.get("option_d", ""))
+        ]
+
+        opts_frame = ctk.CTkFrame(card, fg_color="transparent")
+        opts_frame.pack(fill="x", padx=14, pady=(0, 10))
+
+        for letter, opt_text in options:
+            is_correct = (letter == correct)
+            opt_row = ctk.CTkFrame(
+                opts_frame,
+                fg_color=("#c3e6cb", "#1b3a1e") if is_correct else "transparent",
+                corner_radius=6
+            )
+            opt_row.pack(fill="x", pady=2)
+
+            prefix = f"✅ [{letter}]." if is_correct else f"    [{letter}]."
+            txt_color = ("#155724", "#d4edda") if is_correct else None
+            font_weight = "bold" if is_correct else "normal"
+
+            lbl = ctk.CTkLabel(
+                opt_row,
+                text=f"{prefix} {opt_text}",
+                font=("Helvetica", 12, font_weight),
+                text_color=txt_color,
+                justify="left",
+                anchor="w",
+                wraplength=730
+            )
+            lbl.pack(side="left", padx=8, pady=4)
+
+    def _on_load_error(self, err: str):
+        self.loading_label.configure(text=f"❌ Lỗi tải câu hỏi: {err}", text_color=DANGER_COLOR)
+
+    def _export_to_docx(self):
+        if not self.questions:
+            show_warning("Trống", "Đề thi này chưa có câu hỏi để xuất file!", parent=self)
+            return
+
+        dest_file = filedialog.asksaveasfilename(
+            parent=self,
+            title="Lưu đề thi ra Word",
+            defaultextension=".docx",
+            filetypes=[("Microsoft Word Document (*.docx)", "*.docx")],
+            initialfile=f"DeThi_{self.exam_data.get('id', 1)}.docx"
+        )
+        if not dest_file:
+            return
+
+        try:
+            import docx
+            doc = docx.Document()
+            title = self.exam_data.get("title", "ĐỀ THI")
+            subj_name = self.exam_data.get("subject_name", "")
+            duration = self.exam_data.get("duration_minutes", 30)
+
+            doc.add_heading(title, level=0)
+            p_info = doc.add_paragraph()
+            p_info.add_run(f"Môn học: {subj_name} | Thời gian: {duration} phút | Tổng số câu: {len(self.questions)}\n").bold = True
+
+            for idx, q in enumerate(self.questions, 1):
+                order = q.get("order_number") or idx
+                p_q = doc.add_paragraph()
+                p_q.add_run(f"Câu {order}: {q.get('content', '')}\n").bold = True
+                doc.add_paragraph(f"A. {q.get('option_a', '')}")
+                doc.add_paragraph(f"B. {q.get('option_b', '')}")
+                doc.add_paragraph(f"C. {q.get('option_c', '')}")
+                doc.add_paragraph(f"D. {q.get('option_d', '')}")
+                doc.add_paragraph(f"Đáp án: {q.get('correct_answer', '')}  |  Độ khó: {q.get('difficulty', 'MEDIUM')}\n")
+
+            doc.save(dest_file)
+            show_info("Thành công", f"Đã xuất đề thi thành công ra tệp:\n{dest_file}", parent=self)
+        except Exception as e:
+            show_error("Lỗi xuất file", f"Không thể lưu file Word: {e}", parent=self)
+
+
 class CreateExamDialog(ctk.CTkToplevel):
     """
     Dialog for creating a new exam, supporting both random question generation
@@ -536,53 +839,64 @@ class ExamCreatorPanel(ctk.CTkFrame):
         )
         self.refresh_btn.grid(row=0, column=2)
 
-        # Right buttons: Tạo đề, Bắt đầu thi, Kết thúc thi, Xóa
+        # Right buttons: Xem đề, Tạo đề, Bắt đầu thi, Kết thúc thi, Xóa
         right_box = ctk.CTkFrame(toolbar, fg_color="transparent")
         right_box.grid(row=0, column=1, sticky="e")
+
+        self.view_btn = ctk.CTkButton(
+            right_box,
+            text="👁️ Xem đề",
+            width=90,
+            height=34,
+            fg_color="#17a2b8",
+            hover_color="#138496",
+            command=self._view_selected_exam
+        )
+        self.view_btn.grid(row=0, column=0, padx=(0, 6))
 
         self.create_btn = ctk.CTkButton(
             right_box,
             text="➕ Tạo đề",
-            width=90,
+            width=85,
             height=34,
             fg_color=SUCCESS_COLOR,
             hover_color="#218838",
             command=self._open_create_dialog
         )
-        self.create_btn.grid(row=0, column=0, padx=(0, 6))
+        self.create_btn.grid(row=0, column=1, padx=(0, 6))
 
         self.start_btn = ctk.CTkButton(
             right_box,
-            text="▶️ Bắt đầu thi",
-            width=110,
+            text="▶️ Bắt đầu",
+            width=95,
             height=34,
             fg_color=PRIMARY_COLOR,
             hover_color=PRIMARY_HOVER,
             command=self._start_selected_exam
         )
-        self.start_btn.grid(row=0, column=1, padx=(0, 6))
+        self.start_btn.grid(row=0, column=2, padx=(0, 6))
 
         self.end_btn = ctk.CTkButton(
             right_box,
             text="⏹️ Kết thúc",
-            width=95,
+            width=90,
             height=34,
             fg_color=WARNING_COLOR,
             hover_color="#d3680e",
             command=self._end_selected_exam
         )
-        self.end_btn.grid(row=0, column=2, padx=(0, 6))
+        self.end_btn.grid(row=0, column=3, padx=(0, 6))
 
         self.delete_btn = ctk.CTkButton(
             right_box,
             text="🗑️ Xóa",
-            width=70,
+            width=65,
             height=34,
             fg_color=DANGER_COLOR,
             hover_color="#bd2130",
             command=self._delete_selected_exam
         )
-        self.delete_btn.grid(row=0, column=3)
+        self.delete_btn.grid(row=0, column=4)
 
         # 3. Treeview Table
         table_frame = ctk.CTkFrame(self, corner_radius=8)
@@ -623,6 +937,10 @@ class ExamCreatorPanel(ctk.CTkFrame):
 
         self.tree.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Double click to view exam
+        self.tree.bind("<Double-1>", lambda e: self._view_selected_exam())
+        self.tree.bind("<Return>", lambda e: self._view_selected_exam())
 
         # 4. Status Bar
         self.status_label = ctk.CTkLabel(
@@ -712,6 +1030,20 @@ class ExamCreatorPanel(ctk.CTkFrame):
             if e.get("id") == eid:
                 return e
         return None
+
+    def _view_selected_exam(self):
+        exam = self._get_selected_exam()
+        if not exam:
+            show_warning("Chưa chọn", "Vui lòng chọn đề thi cần xem chi tiết!", parent=self)
+            return
+
+        ViewExamDialog(
+            self,
+            self.connection,
+            self.token,
+            exam_data=exam,
+            subjects=self.subjects_cache
+        )
 
     def _open_create_dialog(self):
         CreateExamDialog(
