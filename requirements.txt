@@ -2,3 +2,5 @@ pymysql
 bcrypt
 customtkinter
 Pillow
+matplotlib
+python-docx
