@@ -1,0 +1,37 @@
+Câu 1: Giao thức nào hoạt động ở tầng Giao vận (Transport Layer) đảm bảo truyền dữ liệu tin cậy?
+A. UDP (User Datagram Protocol)
+*B. TCP (Transmission Control Protocol)
+C. IP (Internet Protocol)
+D. ICMP (Internet Control Message Protocol)
+Độ khó: DỄ
+
+Câu 2: Địa chỉ IP phiên bản 4 (IPv4) có độ dài là bao nhiêu bit?
+A. 16 bit
+B. 32 bit
+C. 64 bit
+D. 128 bit
+Đáp án: B
+Độ khó: DỄ
+
+Câu 3: Cổng (Port) mặc định của dịch vụ truyền file an toàn qua SSH (SFTP) và SSH là bao nhiêu?
+A. 20
+B. 21
+C. 22
+D. 25
+Đáp án: C
+Độ khó: TRUNG BÌNH
+
+Câu 4: Trong lập trình Socket TCP với Python, phương thức nào trên đối tượng socket dùng để chấp nhận một kết nối từ client?
+A. socket.bind()
+B. socket.listen()
+*C. socket.accept()
+D. socket.recv()
+Độ khó: TRUNG BÌNH
+
+Câu 5: Giao thức mạng nào sau đây hoạt động theo mô hình phi kết nối (Connectionless)?
+A. TCP
+B. UDP
+C. FTP
+D. SMTP
+Đáp án: B
+Độ khó: KHÓ

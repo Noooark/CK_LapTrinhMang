@@ -36,8 +36,29 @@ class ExamService:
         data['teacher_id'] = user['id']
 
         # Handle question selection
-        question_ids = data.get('question_ids', [])
+        question_ids = list(data.get('question_ids', []))
+        new_questions = data.get('new_questions', [])
+
+        # If new questions were supplied directly (e.g. from file import during exam creation)
+        if new_questions:
+            valid_new = []
+            for q in new_questions:
+                valid_new.append({
+                    'subject_id': int(subject_id),
+                    'content': str(q['content']).strip(),
+                    'option_a': str(q['option_a']).strip(),
+                    'option_b': str(q['option_b']).strip(),
+                    'option_c': str(q['option_c']).strip(),
+                    'option_d': str(q['option_d']).strip(),
+                    'correct_answer': str(q['correct_answer']).strip().upper(),
+                    'difficulty': q.get('difficulty', 'MEDIUM')
+                })
+            created_new_ids = QuestionDAO.create_batch(valid_new)
+            question_ids.extend(created_new_ids)
+
         random_count = data.get('random_count', 0)
+        if not random_count and data.get('random'):
+            random_count = data.get('total_questions', 0)
 
         if random_count > 0:
             # Random selection from subject

@@ -9,6 +9,7 @@ from client.ui.utils import (
     PRIMARY_COLOR, PRIMARY_HOVER, DANGER_COLOR, SUCCESS_COLOR,
     style_treeview, show_error, show_info, show_warning, ask_yes_no
 )
+from client.ui.teacher.question_importer import ImportQuestionsDialog
 
 
 class QuestionDialog(ctk.CTkToplevel):
@@ -322,38 +323,49 @@ class QuestionBankPanel(ctk.CTkFrame):
         btn_box = ctk.CTkFrame(toolbar, fg_color="transparent")
         btn_box.grid(row=0, column=1, sticky="e")
 
+        self.import_btn = ctk.CTkButton(
+            btn_box,
+            text="📥 Import file (.docx/.txt)",
+            width=150,
+            height=34,
+            fg_color="#17a2b8",
+            hover_color="#138496",
+            command=self._open_import_dialog
+        )
+        self.import_btn.grid(row=0, column=0, padx=(0, 6))
+
         self.add_btn = ctk.CTkButton(
             btn_box,
-            text="➕ Thêm câu hỏi",
+            text="➕ Thêm thủ công",
             width=115,
             height=34,
             fg_color=SUCCESS_COLOR,
             hover_color="#218838",
             command=self._open_add_dialog
         )
-        self.add_btn.grid(row=0, column=0, padx=(0, 6))
+        self.add_btn.grid(row=0, column=1, padx=(0, 6))
 
         self.edit_btn = ctk.CTkButton(
             btn_box,
             text="✏️ Sửa",
-            width=75,
+            width=65,
             height=34,
             fg_color=PRIMARY_COLOR,
             hover_color=PRIMARY_HOVER,
             command=self._open_edit_dialog
         )
-        self.edit_btn.grid(row=0, column=1, padx=(0, 6))
+        self.edit_btn.grid(row=0, column=2, padx=(0, 6))
 
         self.delete_btn = ctk.CTkButton(
             btn_box,
             text="🗑️ Xóa",
-            width=75,
+            width=65,
             height=34,
             fg_color=DANGER_COLOR,
             hover_color="#bd2130",
             command=self._delete_selected_question
         )
-        self.delete_btn.grid(row=0, column=2)
+        self.delete_btn.grid(row=0, column=3)
 
         # 3. Treeview Table
         table_frame = ctk.CTkFrame(self, corner_radius=8)
@@ -484,6 +496,23 @@ class QuestionBankPanel(ctk.CTkFrame):
             if q.get("id") == qid:
                 return q
         return None
+
+    def _open_import_dialog(self):
+        selected_subj = self.subj_filter_var.get()
+        init_id = None
+        for s in self.subjects_cache:
+            if s.get("name") == selected_subj:
+                init_id = s.get("id")
+                break
+
+        ImportQuestionsDialog(
+            self,
+            self.connection,
+            self.token,
+            subjects=self.subjects_cache,
+            initial_subject_id=init_id,
+            on_import_success=self.refresh_data
+        )
 
     def _open_add_dialog(self):
         QuestionDialog(

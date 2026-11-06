@@ -126,6 +126,32 @@ class QuestionDAO:
             return None
 
     @staticmethod
+    def create_batch(questions: list) -> list[int]:
+        """Insert multiple questions in a single transaction, returns created IDs."""
+        created_ids = []
+        try:
+            with DatabaseConnection() as conn:
+                with conn.cursor() as cur:
+                    for q in questions:
+                        cur.execute(
+                            "INSERT INTO questions (subject_id, content, option_a, option_b, "
+                            "option_c, option_d, correct_answer, difficulty) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                            (
+                                q['subject_id'], q['content'],
+                                q['option_a'], q['option_b'],
+                                q['option_c'], q['option_d'],
+                                q['correct_answer'],
+                                q.get('difficulty', 'MEDIUM')
+                            )
+                        )
+                        created_ids.append(cur.lastrowid)
+            return created_ids
+        except Exception as e:
+            logger.error(f"Error creating batch questions: {e}")
+            return []
+
+    @staticmethod
     def update(question_id: int, data: dict) -> bool:
         try:
             with DatabaseConnection() as conn:

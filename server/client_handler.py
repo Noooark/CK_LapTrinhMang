@@ -84,6 +84,7 @@ class ClientHandler(threading.Thread):
                 # Question management (TEACHER, ADMIN)
                 CommandType.GET_QUESTIONS: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: QuestionService.get_questions(data, user)),
                 CommandType.CREATE_QUESTION: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: QuestionService.create_question(data)),
+                CommandType.BATCH_CREATE_QUESTIONS: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: QuestionService.batch_create_questions(data, user)),
                 CommandType.UPDATE_QUESTION: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: QuestionService.update_question(data)),
                 CommandType.DELETE_QUESTION: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: QuestionService.delete_question(data)),
 

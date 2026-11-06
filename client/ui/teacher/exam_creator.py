@@ -1,6 +1,8 @@
+import os
+import shutil
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 from typing import Dict, Any, Optional, List
 import customtkinter as ctk
 
@@ -9,6 +11,7 @@ from client.ui.utils import (
     PRIMARY_COLOR, PRIMARY_HOVER, DANGER_COLOR, SUCCESS_COLOR, WARNING_COLOR,
     style_treeview, show_error, show_info, show_warning, ask_yes_no
 )
+from common.parser import QuestionParser
 
 
 class CreateExamDialog(ctk.CTkToplevel):
@@ -33,6 +36,7 @@ class CreateExamDialog(ctk.CTkToplevel):
 
         self.subject_questions: List[Dict[str, Any]] = []
         self.selected_question_ids = set()
+        self.file_imported_questions: List[Dict[str, Any]] = []
 
         self.title("Tạo Đề Thi Mới")
         self.geometry("700x680")
@@ -111,7 +115,7 @@ class CreateExamDialog(ctk.CTkToplevel):
         self.mode_var = ctk.StringVar(value="RANDOM")
         self.mode_segmented = ctk.CTkSegmentedButton(
             container,
-            values=["Ngẫu nhiên", "Chọn thủ công"],
+            values=["Ngẫu nhiên", "Chọn thủ công", "📁 Nhập từ file"],
             command=self._on_mode_changed,
             height=34
         )
@@ -168,6 +172,66 @@ class CreateExamDialog(ctk.CTkToplevel):
         self.manual_count_label = ctk.CTkLabel(self.manual_frame, text="Đã chọn: 0 câu", font=("Helvetica", 11, "bold"))
         self.manual_count_label.pack(anchor="e", pady=(4, 0))
 
+        # Frame for FILE IMPORT mode
+        self.file_frame = ctk.CTkFrame(container, fg_color="transparent")
+        # Hidden by default
+
+        file_picker_row = ctk.CTkFrame(self.file_frame, fg_color="transparent")
+        file_picker_row.pack(fill="x", pady=(0, 6))
+
+        self.file_path_entry = ctk.CTkEntry(
+            file_picker_row,
+            placeholder_text="Chọn tệp Word (.docx) hoặc Text (.txt)...",
+            height=34
+        )
+        self.file_path_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        ctk.CTkButton(
+            file_picker_row,
+            text="📂 Chọn file...",
+            width=105,
+            height=34,
+            command=self._browse_exam_file
+        ).pack(side="left", padx=(0, 6))
+
+        ctk.CTkButton(
+            file_picker_row,
+            text="📄 Tải mẫu",
+            width=85,
+            height=34,
+            fg_color="gray50",
+            hover_color="gray40",
+            command=self._save_sample_file
+        ).pack(side="left")
+
+        self.file_status_label = ctk.CTkLabel(
+            self.file_frame,
+            text="Chưa chọn tệp. Hãy chọn file .docx hoặc .txt để nạp toàn bộ câu hỏi vào đề thi.",
+            font=("Helvetica", 11),
+            text_color="gray60"
+        )
+        self.file_status_label.pack(anchor="w", pady=(0, 4))
+
+        tbl_file_box = ctk.CTkFrame(self.file_frame, height=200)
+        tbl_file_box.pack(fill="both", expand=True)
+
+        file_cols = ("stt", "content", "diff", "correct")
+        self.file_tree = ttk.Treeview(tbl_file_box, columns=file_cols, show="headings", height=7, selectmode="browse")
+        self.file_tree.heading("stt", text="#")
+        self.file_tree.heading("content", text="Nội dung câu hỏi")
+        self.file_tree.heading("diff", text="Độ khó")
+        self.file_tree.heading("correct", text="Đ/A")
+
+        self.file_tree.column("stt", width=35, anchor="center")
+        self.file_tree.column("content", width=420, anchor="w")
+        self.file_tree.column("diff", width=70, anchor="center")
+        self.file_tree.column("correct", width=50, anchor="center")
+
+        f_scroll = ttk.Scrollbar(tbl_file_box, orient="vertical", command=self.file_tree.yview)
+        self.file_tree.configure(yscrollcommand=f_scroll.set)
+        self.file_tree.pack(side="left", fill="both", expand=True)
+        f_scroll.pack(side="right", fill="y")
+
         # Action Buttons
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.grid(row=2, column=0, padx=25, pady=(15, 20), sticky="ew")
@@ -196,13 +260,75 @@ class CreateExamDialog(ctk.CTkToplevel):
         self._load_subject_questions()
 
     def _on_mode_changed(self, mode_str):
+        self.random_frame.grid_forget()
+        self.manual_frame.grid_forget()
+        self.file_frame.grid_forget()
+
         if mode_str == "Ngẫu nhiên":
-            self.manual_frame.grid_forget()
             self.random_frame.grid(row=5, column=0, sticky="ew", pady=(5, 10))
-        else:
-            self.random_frame.grid_forget()
+        elif mode_str == "Chọn thủ công":
             self.manual_frame.grid(row=5, column=0, sticky="nsew", pady=(5, 10))
             self._populate_manual_questions()
+        elif mode_str == "📁 Nhập từ file":
+            self.file_frame.grid(row=5, column=0, sticky="nsew", pady=(5, 10))
+
+    def _browse_exam_file(self):
+        filetypes = [
+            ("Tệp trắc nghiệm (*.docx, *.txt)", "*.docx;*.txt"),
+            ("Microsoft Word Document (*.docx)", "*.docx"),
+            ("Văn bản thuần (*.txt)", "*.txt"),
+            ("Tất cả tệp", "*.*")
+        ]
+        chosen = filedialog.askopenfilename(
+            parent=self,
+            title="Chọn file đề thi trắc nghiệm",
+            filetypes=filetypes
+        )
+        if not chosen:
+            return
+
+        self.file_path_entry.delete(0, "end")
+        self.file_path_entry.insert(0, chosen)
+
+        for item in self.file_tree.get_children():
+            self.file_tree.delete(item)
+
+        questions, errors = QuestionParser.parse_file(chosen)
+        self.file_imported_questions = questions
+
+        for idx, q in enumerate(questions, 1):
+            c_prev = q["content"].replace("\n", " ")[:60]
+            self.file_tree.insert("", "end", values=(idx, c_prev, q["difficulty"], q["correct_answer"]))
+
+        if questions:
+            msg = f"✅ Nhận diện: {len(questions)} câu hỏi hợp lệ!"
+            if errors:
+                msg += f" (Bỏ qua {len(errors)} câu lỗi)"
+            self.file_status_label.configure(text=msg, text_color=SUCCESS_COLOR)
+        else:
+            self.file_status_label.configure(text="❌ Không tìm thấy câu hỏi hợp lệ trong tệp!", text_color=DANGER_COLOR)
+
+    def _save_sample_file(self):
+        sample_docx = "/home/khoile/Documents/QuizApp/database/mau_cau_hoi.docx"
+        dest_file = filedialog.asksaveasfilename(
+            parent=self,
+            title="Lưu file đề thi mẫu",
+            defaultextension=".docx",
+            filetypes=[("Microsoft Word (*.docx)", "*.docx"), ("Văn bản (*.txt)", "*.txt")],
+            initialfile="mau_de_thi.docx"
+        )
+        if not dest_file:
+            return
+
+        try:
+            if dest_file.endswith(".txt"):
+                src_txt = "/home/khoile/Documents/QuizApp/database/mau_cau_hoi.txt"
+                shutil.copyfile(src_txt, dest_file)
+            else:
+                shutil.copyfile(sample_docx, dest_file)
+            show_info("Đã lưu mẫu", f"Đã lưu tệp mẫu thành công tại:\n{dest_file}", parent=self)
+        except Exception as e:
+            show_error("Lỗi sao chép", f"Không thể lưu file mẫu: {e}", parent=self)
 
     def _on_subject_changed(self, _):
         self._load_subject_questions()
@@ -275,8 +401,11 @@ class CreateExamDialog(ctk.CTkToplevel):
             show_error("Sai dữ liệu", "Thời gian thi phải là số nguyên dương (phút)!", parent=self)
             return
 
-        is_random = (self.mode_segmented.get() == "Ngẫu nhiên")
+        mode = self.mode_segmented.get()
+        is_random = (mode == "Ngẫu nhiên")
+        is_file = (mode == "📁 Nhập từ file")
         question_ids = []
+        new_questions = []
         total_questions = 0
 
         if is_random:
@@ -287,6 +416,12 @@ class CreateExamDialog(ctk.CTkToplevel):
             except ValueError:
                 show_error("Sai dữ liệu", "Số lượng câu hỏi phải là số nguyên dương!", parent=self)
                 return
+        elif is_file:
+            if not self.file_imported_questions:
+                show_error("Thiếu câu hỏi", "Vui lòng chọn file (.docx / .txt) chứa ít nhất 1 câu hỏi hợp lệ!", parent=self)
+                return
+            new_questions = self.file_imported_questions
+            total_questions = len(new_questions)
         else:
             if not self.selected_question_ids:
                 show_error("Thiếu câu hỏi", "Vui lòng chọn ít nhất 1 câu hỏi cho đề thi!", parent=self)
@@ -304,6 +439,7 @@ class CreateExamDialog(ctk.CTkToplevel):
                     "duration_minutes": duration,
                     "total_questions": total_questions,
                     "question_ids": question_ids,
+                    "new_questions": new_questions,
                     "random": is_random
                 }
                 resp = self.connection.send_request("CREATE_EXAM", data=payload, token=self.token)
