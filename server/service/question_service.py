@@ -95,7 +95,7 @@ class QuestionService:
     @staticmethod
     def update_question(data: dict) -> tuple[bool, str, None]:
         """Update a question."""
-        question_id = data.get('id')
+        question_id = data.get('id') or data.get('question_id')
         if not question_id:
             return False, "Thiếu ID câu hỏi", None
 
@@ -106,7 +106,7 @@ class QuestionService:
     @staticmethod
     def delete_question(data: dict) -> tuple[bool, str, None]:
         """Delete a question."""
-        question_id = data.get('id')
+        question_id = data.get('id') or data.get('question_id')
         if not question_id:
             return False, "Thiếu ID câu hỏi", None
 
