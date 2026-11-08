@@ -1,9 +1,9 @@
 import docx
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
-from docx.oxml import OxmlElement, parse_xml
-from docx.oxml.ns import nsdecls, qn
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 import os
 
 OUT_PATH = "/home/khoile/Documents/QuizApp/chuong2_phantich_thietke.docx"
@@ -12,8 +12,7 @@ FIG_DIR = "/home/khoile/Documents/QuizApp/figures"
 doc = docx.Document()
 
 # Setup standard A4 margins (top: 2cm, bottom: 2cm, left: 3cm, right: 2cm)
-sections = doc.sections
-for section in sections:
+for section in doc.sections:
     section.top_margin = Inches(0.79)     # 2 cm
     section.bottom_margin = Inches(0.79)  # 2 cm
     section.left_margin = Inches(1.18)    # 3 cm
@@ -47,7 +46,7 @@ def add_h1(text):
     run.font.name = 'Times New Roman'
     run.font.size = Pt(16)
     run.font.bold = True
-    run.font.color.rgb = RGBColor(0, 51, 102) # Deep Navy Blue
+    run.font.color.rgb = RGBColor(0, 51, 102)
     return p
 
 def add_h2(text):
@@ -72,18 +71,6 @@ def add_h3(text):
     run.font.size = Pt(13)
     run.font.bold = True
     run.font.color.rgb = RGBColor(30, 30, 30)
-    return p
-
-def add_h4(text):
-    p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(6)
-    p.paragraph_format.space_after = Pt(2)
-    p.paragraph_format.keep_with_next = True
-    run = p.add_run(text)
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(13)
-    run.font.bold = True
-    run.font.italic = True
     return p
 
 def add_p(text, bold_prefix="", indent=0.3):
@@ -161,14 +148,48 @@ def add_code_block(code_text, caption=""):
         run_cap.font.italic = True
         run_cap.font.bold = True
 
-print("Building Chapter 2 document...")
+print("Building Chapter 2 with new section 2.1...")
 
 # CHAPTER TITLE
 add_h1("CHƯƠNG 2: PHÂN TÍCH VÀ THIẾT KẾ HỆ THỐNG")
 
-# 2.1
-add_h2("2.1. Mô hình Client–Server và giao thức TCP")
-add_p("Mô hình Client–Server là kiến trúc phân tán kinh điển và phổ biến bậc nhất trong các hệ thống mạng máy tính hiện nay. Trong mô hình này, hệ thống được phân định rõ ràng thành hai vai trò độc lập: phía khách (Client) là thực thể chủ động gửi các yêu cầu dịch vụ (Service Requests), và máy chủ (Server) là thực thể thụ động lắng nghe, tiếp nhận, thực thi các thuật toán nghiệp vụ và phản hồi kết quả về cho các Client. Máy chủ đóng vai trò hạt nhân trung tâm, chịu trách nhiệm quản lý kết nối đồng thời từ nhiều người dùng, kiểm soát an toàn dữ liệu và điều phối các phiên làm việc. Kiến trúc này mang lại ưu thế vượt trội về khả năng quản lý tập trung, tính mở rộng cao và độ bảo mật tin cậy, đặc biệt tương thích hoàn hảo với các hệ sinh thái giáo dục và khảo thí trực tuyến.")
+# 2.1 NEW SECTION REQUESTED BY USER
+add_h2("2.1. Tổng quan kiến trúc mạng, giao thức, topology và các chức năng trọng tâm của dự án")
+add_p("Trước khi đi sâu vào phân tích chi tiết cơ chế socket và các thuật toán triển khai, mục này trình bày tổng quan mang tính định hướng về kiến trúc mô hình, danh mục giao thức, cấu trúc liên kết mạng (topology) và các tính năng nghiệp vụ đặc biệt quan trọng được hiện thực hóa trong hệ thống thi trắc nghiệm trực tuyến QuizApp.")
+
+add_h3("2.1.1. Mô hình kiến trúc ứng dụng mạng")
+add_p("Dự án QuizApp lựa chọn mô hình Client–Server tập trung (Centralized Client-Server Model) kết hợp kiến trúc phân tầng 3 lớp (3-Tier Architecture):")
+add_bullet("Ứng dụng đồ họa máy trạm (Desktop Client) được xây dựng bằng Python và CustomTkinter, phụ trách giao tiếp với người dùng và gửi nhận yêu cầu qua mạng.", "• Tầng 1 - Trình diễn (Presentation Tier / Client): ")
+add_bullet("Máy chủ mạng TCP Socket đa luồng (QuizServer) viết bằng Python thuần, chạy thường trực tại cổng 9999 để phân giải gói tin, kiểm tra tính hợp lệ của Token phiên, phân quyền người dùng và thực thi các logic nghiệp vụ khảo thí.", "• Tầng 2 - Xử lý nghiệp vụ (Application / Server Tier): ")
+add_bullet("Cơ sở dữ liệu quan hệ MySQL Server 8.0 đóng gói trong Docker Container tại cổng 3306, lưu trữ bền vững thông tin tài khoản, ngân hàng câu hỏi, đề thi và lịch sử kết quả thi.", "• Tầng 3 - Dữ liệu bền vững (Data Storage Tier): ")
+add_p("Lý do lựa chọn mô hình Client–Server tập trung thay vì mô hình ngang hàng (P2P): Trong bài toán khảo thí trực tuyến, tính toàn vẹn dữ liệu, chống gian lận và kiểm soát điểm số đòi hỏi một máy chủ có thẩm quyền tối cao (Authoritative Server). Máy chủ là nơi duy nhất lưu giữ đáp án chuẩn, có quyền khởi động hoặc kết thúc ca thi, tự động tính điểm độc lập và lưu trữ kết quả an toàn. Mô hình P2P hoàn toàn không phù hợp cho thi cử vì thiếu cơ chế kiểm soát gian lận tập trung.")
+
+add_h3("2.1.2. Danh mục các giao thức mạng được áp dụng")
+add_p("Hệ thống QuizApp kết hợp hài hòa các giao thức mạng chuẩn quốc tế và giao thức tầng ứng dụng tự định nghĩa:")
+add_bullet("Hoạt động tại cổng TCP 9999, cung cấp kênh truyền hai chiều tin cậy (Full-Duplex Stream), đảm bảo các gói tin đề thi và bài nộp đến đích chính xác 100%, không bị mất mát hay đảo lộn thứ tự.", "• Giao thức TCP Socket (Tầng Transport): ")
+add_bullet("Đóng gói dữ liệu dạng JSON kết hợp tiêu đề 4 byte Big-Endian biểu thị độ dài (Length-Prefix Framing). Cơ chế này giải quyết triệt để vấn đề phân mảnh gói tin và dính gói (Sticky Packets) vốn là đặc thù phức tạp của luồng byte TCP.", "• Giao thức tầng ứng dụng tùy biến (Custom Application Protocol): ")
+add_bullet("Băm mật khẩu người dùng bằng thuật toán Bcrypt một chiều kèm muối ngẫu nhiên (Salt), kết hợp cấp phát thẻ phiên ngẫu nhiên UUIDv4 Token lưu trên bộ nhớ RAM máy chủ để kiểm soát quyền hạn (RBAC) trên từng yêu cầu.", "• Giao thức bảo mật xác thực và quản lý phiên: ")
+add_bullet("Giao thức kết nối CSDL chuẩn cổng 3306 với cơ chế Prepared Statements, bảo vệ an toàn hệ thống trước các nguy cơ tấn công SQL Injection.", "• Giao thức PyMySQL kết nối CSDL: ")
+
+add_h3("2.1.3. Cấu trúc liên kết mạng (Network Topology)")
+add_p("Hệ thống QuizApp được thiết kế để vận hành tối ưu trên cấu trúc liên kết mạng Topology hình sao (Star Topology):")
+add_bullet("Máy chủ QuizServer đóng vai trò là nút trung tâm (Central Hub Node), kiểm soát toàn bộ lưu lượng vào/ra và điều phối hoạt động của hệ thống.", "• Nút trung tâm (Hub Node): ")
+add_bullet("Các máy trạm Client đại diện cho các vai trò khác nhau trong hệ thống (Máy Admin, Máy Giảng viên, Máy Sinh viên 1, Sinh viên 2, ..., Sinh viên N) kết nối trực tiếp về máy chủ trung tâm qua giao thức TCP.", "• Các nút nhánh (Leaf Nodes): ")
+add_bullet("Mọi luồng dữ liệu chỉ truyền giữa Client và Server; hoàn toàn không có bất kỳ kênh kết nối trực tiếp nào giữa các máy sinh viên với nhau. Điều này ngăn chặn triệt để hành vi sinh viên can thiệp, gửi bài giải hoặc làm nghẽn kết nối của thí sinh khác trong phòng thi.", "• Đặc trưng an ninh mạng quan trọng: ")
+
+add_image_figure("fig_2_0_star_topology.png", "Hình 2.1: Sơ đồ cấu trúc liên kết mạng Topology hình sao (Star Topology) trong hệ thống QuizApp", width_inch=5.5)
+
+add_h3("2.1.4. Một vài chức năng đặc biệt quan trọng của hệ thống")
+add_p("Hệ thống QuizApp được thiết kế với nhiều tính năng kỹ thuật và nghiệp vụ chuyên sâu, nổi bật gồm:")
+add_bullet("Khi sinh viên yêu cầu nạp đề thi (lệnh GET_EXAM_QUESTIONS), máy chủ chủ động bóc tách và loại bỏ trường đáp án đúng (correct_answer) trước khi đóng gói gửi qua mạng. Ngay cả khi sinh viên dùng phần mềm bắt gói tin (Packet Sniffer / Wireshark) cũng hoàn toàn không thể tìm thấy đáp án trước khi nộp bài.", "1. Cơ chế phòng thi an toàn và chống gian lận mạng: ")
+add_bullet("Giao diện phòng thi tích hợp đồng hồ đếm ngược đồng bộ từng giây. Khi thời gian thi kết thúc (00:00), hệ thống tự động khóa toàn bộ thao tác của thí sinh và phát lệnh nộp bài cưỡng chế (Auto-Submit) về Server.", "2. Đồng hồ đếm ngược thời gian thực và Tự động thu bài: ")
+add_bullet("Toàn bộ quy trình so khớp câu trả lời và tính điểm được thực hiện tự động tại máy chủ theo thang điểm 10, ghi nhận tức thời vào cơ sở dữ liệu và phản hồi kết quả cho thí sinh trong tích tắc (< 100ms).", "3. Chấm điểm tự động tức thì trên máy chủ: ")
+add_bullet("Bộ phân tích cú pháp thông minh (Regex Parser) tự động nhận diện định dạng đề thi tiếng Việt, phân tách câu hỏi, các lựa chọn A, B, C, D, đáp án đúng (ký hiệu * hoặc [A]) và mức độ khó (DỄ, TRUNG BÌNH, KHÓ). Giảng viên có thể nạp hàng trăm câu hỏi chỉ bằng một cú nhấp chuột.", "4. Nạp câu hỏi và đề thi hàng loạt từ tệp Word (.docx) và Text (.txt): ")
+add_bullet("Tái cấu trúc ngân hàng câu hỏi phân lập độc lập theo từng môn học; tích hợp cửa sổ xem đề thi trực quan với đáp án đúng được làm nổi bật màu xanh lá và hỗ trợ xuất đề thi ra file Microsoft Word (.docx) phục vụ lưu trữ học vụ.", "5. Quản lý Ngân hàng câu hỏi phân lập theo môn & Xuất Word: ")
+
+# 2.2
+add_h2("2.2. Mô hình Client–Server và giao thức TCP")
+add_p("Mô hình Client–Server là kiến trúc phân tán kinh điển và phổ biến bậc nhất trong các hệ thống mạng máy tính hiện nay. Trong mô hình này, hệ thống được phân định rõ ràng thành hai vai trò độc lập: phía khách (Client) là thực thể chủ động gửi các yêu cầu dịch vụ (Service Requests), và máy chủ (Server) là thực thể thụ động lắng nghe, tiếp nhận, thực thi các thuật toán nghiệp vụ và phản hồi kết quả về cho các Client. Máy chủ đóng vai trò hạt nhân trung tâm, chịu trách nhiệm quản lý kết nối đồng thời từ nhiều người dùng, kiểm soát an toàn dữ liệu và điều phối các phiên làm việc.")
 
 add_p("Hoạt động trao đổi dữ liệu trong mô hình Client–Server được xây dựng trên nền tảng bộ giao thức TCP/IP chuẩn quốc tế. Tại tầng giao vận (Transport Layer), giao thức TCP (Transmission Control Protocol) là sự lựa chọn cốt lõi và tối ưu nhất đối với các ứng dụng đòi hỏi tính toàn vẹn và độ tin cậy tuyệt đối, trong đó có hệ thống thi trắc nghiệm trực tuyến QuizApp.")
 
@@ -176,21 +197,21 @@ add_p("Giao thức TCP sở hữu những đặc tính kỹ thuật cơ bản v�
 
 add_bullet(" Trước khi bất kỳ byte dữ liệu nào được truyền tải, hai bên Client và Server bắt buộc phải thiết lập một kênh truyền thông logic thông qua quá trình bắt tay 3 bước (Three-way Handshake). Quá trình này đảm bảo cả hai thiết bị đều sẵn sàng gửi nhận và đã đồng bộ hóa số thứ tự gói tin (Sequence Number).", "• Hướng kết nối (Connection-oriented):")
 
-add_image_figure("fig_2_1_handshake.png", "Hình 2.1: Quá trình bắt tay 3 bước trong giao thức TCP", width_inch=4.8)
+add_image_figure("fig_2_1_handshake.png", "Hình 2.2: Quá trình bắt tay 3 bước trong giao thức TCP", width_inch=4.8)
 
 add_bullet(" TCP sử dụng cơ chế số thứ tự (Sequence Numbers), gói tin xác nhận nhận đủ (Acknowledgment - ACK) và cơ chế phát hiện lỗi thông qua Checksum. Khi một bên gửi gói tin, bên nhận phải gửi trả ACK tương ứng. Nếu quá một khoảng thời gian chờ (Timeout) mà bên gửi chưa nhận được ACK, gói tin sẽ được tự động truyền lại (Retransmission). Cơ chế này đảm bảo dữ liệu không bao giờ bị mất mát, không bị nhân đôi và đến đích theo đúng thứ tự ban đầu.", "• Đảm bảo độ tin cậy tuyệt đối (Reliability):")
 
 add_bullet(" Khác với giao thức UDP truyền theo từng gói tin độc lập (Datagram), TCP coi dữ liệu truyền tải là một dòng các byte liên tục không phân ranh giới tự nhiên. Dữ liệu từ ứng dụng được ghi vào bộ đệm của socket và được chia thành các phân đoạn (Segments) phù hợp với kích thước gói tối đa (MSS - Maximum Segment Size) để truyền qua mạng.", "• Truyền dữ liệu dạng luồng byte (Byte-stream):")
 
-add_image_figure("fig_2_2_byte_stream.png", "Hình 2.2: Minh họa việc truyền dữ liệu dạng luồng bởi giao thức TCP", width_inch=5.2)
+add_image_figure("fig_2_2_byte_stream.png", "Hình 2.3: Minh họa việc truyền dữ liệu dạng luồng bởi giao thức TCP", width_inch=5.2)
 
 add_bullet(" TCP tích hợp các thuật toán điều khiển luồng (Flow Control) thông qua cơ chế cửa sổ trượt (Sliding Window) để ngăn máy gửi làm tràn bộ đệm máy nhận, đồng thời áp dụng các thuật toán điều khiển tắc nghẽn (Congestion Control như Slow Start, Congestion Avoidance, Fast Retransmit) giúp mạng hoạt động ổn định trên nhiều hạ tầng kết nối khác nhau.", "• Kiểm soát tắc nghẽn và lưu lượng mạng:")
 
-# 2.2
-add_h2("2.2. Socket và cơ chế giao tiếp trong TCP/IP")
+# 2.3
+add_h2("2.3. Socket và cơ chế giao tiếp trong TCP/IP")
 add_p("Socket là khái niệm trung tâm trong lập trình mạng, đóng vai trò là điểm cuối giao tiếp (Communication Endpoint) giữa chương trình ứng dụng và ngăn xếp giao thức mạng của hệ điều hành. Khi một ứng dụng muốn truyền tải hoặc nhận dữ liệu qua mạng Internet, Socket hoạt động như một cánh cửa kết nối trung gian: ứng dụng chỉ cần thực hiện các thao tác đọc/ghi dữ liệu lên Socket mà không cần quan tâm đến chi tiết phức tạp của tầng dưới như phân đoạn gói tin, đánh số thứ tự, định tuyến IP hay tính toán checksum.")
 
-add_image_figure("fig_2_3_socket_layer.png", "Hình 2.3: Mô tả Socket trong mô hình phân tầng TCP/IP", width_inch=4.8)
+add_image_figure("fig_2_3_socket_layer.png", "Hình 2.4: Mô tả Socket trong mô hình phân tầng TCP/IP", width_inch=4.8)
 
 add_p("Một Socket TCP trong mạng được định danh duy nhất bởi bộ ba thành phần cơ bản:")
 add_bullet("Xác định máy tính hoặc giao diện mạng trên hệ thống Internet.", "1. Địa chỉ IP (IP Address): ")
@@ -199,14 +220,14 @@ add_bullet("Chỉ định phương thức giao vận ở tầng Transport (giao 
 
 add_p("Khi một Socket tại Client kết nối thành công với Socket tại Server, một kênh kết nối ảo hai chiều (Full-Duplex Virtual Circuit) được hình thành. Kênh này cho phép cả hai bên có thể gửi và nhận dữ liệu độc lập, song song và liên tục như thao tác với các luồng vào/ra (I/O Streams) cục bộ trên máy tính.")
 
-add_image_figure("fig_2_4_socket_channel.png", "Hình 2.4: Socket trong mô hình ứng dụng Client-Server", width_inch=5.5)
+add_image_figure("fig_2_4_socket_channel.png", "Hình 2.5: Socket trong mô hình ứng dụng Client-Server", width_inch=5.5)
 
 add_p("Trong lập trình mạng TCP/IP, có hai loại Socket chính:")
 add_bullet("Hoạt động trên giao thức TCP, yêu cầu thiết lập kết nối trước khi truyền, đảm bảo độ tin cậy tuyệt đối, thứ tự gói tin và không mất dữ liệu. Đây là loại Socket bắt buộc được ứng dụng trong đề tài QuizApp nhằm đảm bảo tính chính xác của đề thi và bài làm.", "• Stream Socket (SOCK_STREAM): ")
 add_bullet("Hoạt động trên giao thức UDP, truyền dữ liệu không hướng kết nối, tốc độ nhanh nhưng không cam kết độ tin cậy. Thường chỉ ứng dụng trong các dịch vụ truyền trực tiếp video/audio hoặc trò chơi trực tuyến thời gian thực.", "• Datagram Socket (SOCK_DGRAM): ")
 
-# 2.3
-add_h2("2.3. Quy trình xây dựng ứng dụng Client–Server TCP")
+# 2.4
+add_h2("2.4. Quy trình xây dựng ứng dụng Client–Server TCP")
 add_p("Quy trình xây dựng một hệ thống mạng Client–Server dựa trên giao thức TCP tuân theo mô hình chuẩn của Socket API, bao gồm một chuỗi các bước tuần tự được thực hiện chặt chẽ tại cả hai phía máy chủ và máy khách.")
 
 add_h3("a) Quy trình phía Server")
@@ -218,7 +239,7 @@ add_bullet("Khi có yêu cầu từ Client trong hàng đợi, hệ thống ch�
 add_bullet("Thực hiện truyền và nhận các gói tin nghiệp vụ qua luồng kết nối TCP đã được thiết lập an toàn.", "• Bước 5 - Trao đổi dữ liệu: ")
 add_bullet("Giải phóng Socket con khi phiên làm việc của Client hoàn tất.", "• Bước 6 - Đóng kết nối (close): ")
 
-add_image_figure("fig_2_5_server_algo.png", "Hình 2.5: Thuật toán xây dựng chương trình Server TCP", width_inch=3.8)
+add_image_figure("fig_2_5_server_algo.png", "Hình 2.6: Thuật toán xây dựng chương trình Server TCP", width_inch=3.8)
 
 add_h3("b) Quy trình phía Client")
 add_p("Máy khách là thực thể chủ động kết nối khi có nhu cầu sử dụng dịch vụ:")
@@ -227,45 +248,45 @@ add_bullet("Chủ động phát lệnh kết nối tới máy chủ thông qua c
 add_bullet("Sau khi bắt tay 3 bước thành công, Client gửi yêu cầu (Request) và nhận phản hồi (Response) từ máy chủ.", "• Bước 3 - Trao đổi dữ liệu: ")
 add_bullet("Gửi thông báo kết thúc phiên làm việc và đóng Socket để giải phóng tài nguyên hệ điều hành.", "• Bước 4 - Đóng kết nối (close): ")
 
-add_image_figure("fig_2_6_client_algo.png", "Hình 2.6: Thuật toán xây dựng chương trình Client TCP", width_inch=3.8)
+add_image_figure("fig_2_6_client_algo.png", "Hình 2.7: Thuật toán xây dựng chương trình Client TCP", width_inch=3.8)
 
 add_h3("c) Mô hình tương tác tổng quát Client–Server")
 add_p("Sơ đồ dưới đây minh họa toàn bộ quá trình phối hợp nhịp nhàng giữa Client và Server: Server khởi động và chờ tại accept(); Client khởi động và phát lệnh connect(); kênh truyền ảo TCP được hình thành; hai bên liên tục trao đổi các thông điệp nghiệp vụ; cuối cùng phiên làm việc được đóng lại một cách an toàn.")
 
-add_image_figure("fig_2_7_general_algo.png", "Hình 2.7: Thuật toán xây dựng ứng dụng Client-Server tổng quát", width_inch=5.2)
+add_image_figure("fig_2_7_general_algo.png", "Hình 2.8: Thuật toán xây dựng ứng dụng Client-Server tổng quát", width_inch=5.2)
 
-# 2.4
-add_h2("2.4. Triển khai xây dựng chương trình Client–Server")
+# 2.5
+add_h2("2.5. Triển khai xây dựng chương trình Client–Server")
 add_p("Trong quá trình hiện thực hóa ứng dụng mạng, việc truyền và nhận thông tin qua Socket được quản lý thông qua hai luồng dữ liệu độc lập: Luồng nhập (InputStream) để đọc dữ liệu và Luồng xuất (OutputStream) để ghi dữ liệu. Cả hai luồng này đều được gắn chặt với Socket đã kết nối.")
 
-add_h3("2.4.1. Quy trình triển khai phía Server")
+add_h3("2.5.1. Quy trình triển khai phía Server")
 add_p("Phía Server quản lý kênh giao tiếp với từng Client thông qua Socket con do hàm accept() trả về. Dữ liệu từ phía mạng chuyển vào bộ đệm của Socket sẽ được Server đọc ra thông qua InputStream, trong khi dữ liệu phản hồi được Server ghi vào OutputStream để tầng TCP chuyển qua mạng đến máy khách.")
 
-add_image_figure("fig_2_8_server_streams.png", "Hình 2.8: Chương trình Server gửi nhận dữ liệu nhờ vào các luồng dữ liệu", width_inch=5.5)
+add_image_figure("fig_2_8_server_streams.png", "Hình 2.9: Chương trình Server gửi nhận dữ liệu nhờ vào các luồng dữ liệu", width_inch=5.5)
 
-add_h3("2.4.2. Quy trình triển khai phía Client")
+add_h3("2.5.2. Quy trình triển khai phía Client")
 add_p("Tương tự phía Server, Client thực hiện đóng gói yêu cầu thành chuỗi byte và đẩy vào OutputStream. Dữ liệu phản hồi từ máy chủ sẽ được đón nhận qua InputStream. Nhờ tính chất truyền theo luồng liên tục (Stream) của TCP, Client có thể trao đổi nhiều câu hỏi, đề thi và bài nộp với cấu trúc dữ liệu phong phú.")
 
-add_image_figure("fig_2_9_client_streams.png", "Hình 2.9: Chương trình Client gửi nhận dữ liệu với chương trình Server", width_inch=5.5)
+add_image_figure("fig_2_9_client_streams.png", "Hình 2.10: Chương trình Client gửi nhận dữ liệu với chương trình Server", width_inch=5.5)
 
-add_h3("2.4.3. Kiến trúc Server đa tuyến (Multi-threaded Server)")
+add_h3("2.5.3. Kiến trúc Server đa tuyến (Multi-threaded Server)")
 add_p("Trong mô hình Server đơn tuyến (Single-threaded), chương trình Server chỉ sở hữu duy nhất một luồng thực thi và chỉ có khả năng phục vụ một Client tại một thời điểm. Khi một Client kết nối và trao đổi dữ liệu (ví dụ sinh viên đang làm bài thi kéo dài 45 phút), luồng chính của Server hoàn toàn bị chiếm dụng (blocking). Mọi Client khác muốn đăng nhập hoặc nộp bài đều phải chờ đợi trong vô vọng. Hạn chế nghiêm trọng này làm cho mô hình đơn tuyến không thể ứng dụng trong các môi trường khảo thí thực tế.")
 
 add_p("Để giải quyết triệt để vấn đề này, QuizServer bắt buộc phải được thiết kế và triển khai theo kiến trúc đa tuyến (Multi-threaded Server Architecture). Khi có một Client gửi yêu cầu kết nối đến, vòng lặp chính của Server lập tức khởi tạo một tiểu trình riêng (Worker Thread - ClientHandler) dành riêng cho Client đó. Mỗi Thread sẽ quản lý một Socket độc lập với luồng InputStream và OutputStream riêng biệt.")
 
-add_image_figure("fig_2_10_multithread_overview.png", "Hình 2.10: Minh họa Server đa tuyến phục vụ đồng thời nhiều Client", width_inch=5.5)
+add_image_figure("fig_2_10_multithread_overview.png", "Hình 2.11: Minh họa Server đa tuyến phục vụ đồng thời nhiều Client", width_inch=5.5)
 
-add_image_figure("fig_2_11_multithread_detail.png", "Hình 2.11: Mô hình chi tiết Server đa tuyến với socket và luồng riêng biệt", width_inch=5.8)
+add_image_figure("fig_2_11_multithread_detail.png", "Hình 2.12: Mô hình chi tiết Server đa tuyến với socket và luồng riêng biệt", width_inch=5.8)
 
 add_p("Ưu điểm nổi bật của kiến trúc Server đa tuyến:")
 add_bullet("Hàng chục, hàng trăm sinh viên và giảng viên có thể tương tác đồng thời mà không bị nghẽn mạng.", "• Khả năng phục vụ đồng thời (High Concurrency): ")
 add_bullet("Sự cố phát sinh trên một Client (mất mạng đột ngột, đóng ứng dụng bất thường) chỉ ảnh hưởng đến Thread đó và được dọn dẹp sạch sẽ, hoàn toàn không làm gián đoạn máy chủ hay các thí sinh khác.", "• Cô lập lỗi và an toàn hệ thống (Fault Isolation): ")
 add_bullet("Tận dụng triệt để năng lực tính toán của các bộ vi xử lý đa nhân hiện đại (Multi-core CPUs) để xử lý song song các tác vụ mã hóa, kiểm tra đáp án và ghi nhận kết quả thi.", "• Tối ưu hiệu năng phần cứng: ")
 
-# 2.5
-add_h2("2.5. Ứng dụng mô hình mạng và giao thức vào dự án QuizApp")
+# 2.6
+add_h2("2.6. Ứng dụng mô hình mạng và giao thức vào dự án QuizApp")
 
-add_h3("2.5.1. Mô hình mạng tổng thể của hệ thống")
+add_h3("2.6.1. Mô hình mạng tổng thể của hệ thống")
 add_p("Hệ thống QuizApp được thiết kế theo kiến trúc 3 tầng (3-Tier Architecture) hoàn chỉnh, phân định rõ ràng ranh giới giữa tầng hiển thị, tầng điều phối xử lý mạng và tầng lưu trữ dữ liệu bền vững:")
 
 add_bullet("Ứng dụng đồ họa máy trạm phát triển trên nền tảng Python CustomTkinter hiện đại. Client chịu trách nhiệm quản lý giao diện người dùng, đồng hồ đếm ngược thời gian thực, bảng điều hướng câu hỏi và duy trì kết nối mạng thông qua lớp ServerConnection chuyên biệt.", "1. Tầng máy khách (Client Presentation Tier): ")
@@ -274,9 +295,9 @@ add_bullet("Máy chủ mạng TCP Socket đa luồng (QuizServer) lắng nghe t�
 
 add_bullet("Hệ quản trị cơ sở dữ liệu quan hệ MySQL Server 8.0 được đóng gói triển khai trong Docker Container tại cổng 3306. Cơ sở dữ liệu lưu trữ 7 bảng dữ liệu quan hệ với bộ mã chuẩn utf8mb4, bảo đảm tính toàn vẹn và giao dịch ACID cho các thao tác nạp đề và ghi nhận bài nộp.", "3. Tầng cơ sở dữ liệu (Database Tier): ")
 
-add_image_figure("fig_2_12_quizapp_architecture.png", "Hình 2.12: Mô hình kiến trúc mạng tổng thể 3 tầng của hệ thống QuizApp", width_inch=5.8)
+add_image_figure("fig_2_12_quizapp_architecture.png", "Hình 2.13: Mô hình kiến trúc mạng tổng thể 3 tầng của hệ thống QuizApp", width_inch=5.8)
 
-add_h3("2.5.2. Các giao thức mạng và cơ chế được áp dụng")
+add_h3("2.6.2. Các giao thức mạng và cơ chế được áp dụng")
 add_p("Bảng tổng hợp dưới đây trình bày toàn bộ các giao thức mạng và giải pháp kỹ thuật cốt lõi được áp dụng trong quá trình xây dựng hệ thống QuizApp:")
 
 # Table of protocols
@@ -304,7 +325,6 @@ data = [
     ("PyMySQL Protocol", "Database Transport (Cổng 3306)", "Kết nối Socket TCP an toàn giữa QuizServer và cơ sở dữ liệu MySQL Container bằng cơ chế Prepared Statements chống tấn công SQL Injection.")
 ]
 
-col_widths = [Inches(1.8), Inches(1.7), Inches(3.0)]
 for row_idx, (col0, col1, col2) in enumerate(data, 1):
     row = table.rows[row_idx]
     bg = "F9FAFC" if row_idx % 2 == 1 else "FFFFFF"
@@ -319,8 +339,8 @@ for row_idx, (col0, col1, col2) in enumerate(data, 1):
 
 add_p("", indent=0)
 
-# 2.5.2.1
-add_h3("2.5.2.1. Cơ chế đóng gói và giải khung phân mảnh dữ liệu (Framing Protocol)")
+# 2.6.2.1
+add_h3("2.6.2.1. Cơ chế đóng gói và giải khung phân mảnh dữ liệu (Framing Protocol)")
 add_p("Trong môi trường mạng TCP, dữ liệu được truyền tải dưới dạng luồng byte liên tục (Stream-oriented). Do cơ chế tối ưu hóa của thuật toán Nagle và các tầng đệm mạng, hiện tượng dính gói (Sticky Packets - nhiều thông điệp gộp thành một gói nhận) hoặc phân mảnh gói (Packet Fragmentation - một thông điệp bị xé nhỏ thành nhiều phần) thường xuyên xảy ra. Nếu chỉ sử dụng hàm recv(1024) đơn giản, hệ thống chắc chắn sẽ bị sập hoặc giải mã JSON thất bại khi gửi đề thi lớn chứa nhiều câu hỏi.")
 
 add_p("Để giải quyết triệt để vấn đề này, nhóm đã thiết kế giao thức đóng gói tùy biến sử dụng cơ chế Tiêu đề độ dài cố định 4 byte (4-Byte Big-Endian Length-Prefix Framing) trong module common/protocol.py:")
@@ -353,10 +373,10 @@ def receive_message(sock: socket.socket) -> dict | None:
     length = struct.unpack(">I", header)[0]
     payload = _recvall(sock, length)
     return json.loads(payload.decode("utf-8")) if payload else None"""
-add_code_block(code_protocol, "Hình 2.13: Mã nguồn cơ chế đóng gói và giải khung phân mảnh (common/protocol.py)")
+add_code_block(code_protocol, "Hình 2.14: Mã nguồn cơ chế đóng gói và giải khung phân mảnh (common/protocol.py)")
 
-# 2.5.2.2
-add_h3("2.5.2.2. Khởi tạo và vận hành Server TCP đa luồng")
+# 2.6.2.2
+add_h3("2.6.2.2. Khởi tạo và vận hành Server TCP đa luồng")
 add_p("Module server/main.py hiện thực hóa lớp QuizServer quản lý toàn bộ vòng đời của máy chủ. Server thiết lập tùy chọn SO_REUSEADDR để giải phóng cổng ngay khi khởi động lại, lắng nghe trên cổng 9999 và sử dụng cơ chế Non-blocking Timeout kết hợp vòng lặp accept() để tiếp nhận các kết nối Client:")
 
 code_server = """# server/main.py
@@ -384,10 +404,10 @@ class QuizServer:
                 self.clients.append(handler)
             handler.start()
             logger.info(f"Phục vụ client {address} trên thread riêng")"""
-add_code_block(code_server, "Hình 2.14: Mã nguồn khởi tạo Socket Server đa luồng (server/main.py)")
+add_code_block(code_server, "Hình 2.15: Mã nguồn khởi tạo Socket Server đa luồng (server/main.py)")
 
-# 2.5.2.3
-add_h3("2.5.2.3. Module giao tiếp mạng an toàn phía Client (Thread-Safe)")
+# 2.6.2.3
+add_h3("2.6.2.3. Module giao tiếp mạng an toàn phía Client (Thread-Safe)")
 add_p("Phía Client, giao diện CustomTkinter hoạt động trên một luồng chính (Main GUI Thread). Nếu các lệnh gửi nhận mạng chạy trực tiếp trên luồng này, giao diện sẽ bị đơ (Not Responding) mỗi khi mạng chậm. Do đó, lớp ServerConnection trong client/network.py được thiết kế dạng Thread-safe bằng cách sử dụng threading.Lock() nhằm đồng bộ hóa việc truy cập Socket từ các luồng nền:")
 
 code_client_net = """# client/network.py
@@ -409,10 +429,10 @@ class ServerConnection:
             
             resp = receive_message(self.sock)
             return resp or {"status": "ERROR", "message": "Mất kết nối máy chủ"}"""
-add_code_block(code_client_net, "Hình 2.15: Mã nguồn giao tiếp mạng Client an toàn đa luồng (client/network.py)")
+add_code_block(code_client_net, "Hình 2.16: Mã nguồn giao tiếp mạng Client an toàn đa luồng (client/network.py)")
 
-# 2.5.2.4
-add_h3("2.5.2.4. Bộ điều phối và định tuyến 28 mã lệnh nghiệp vụ")
+# 2.6.2.4
+add_h3("2.6.2.4. Bộ điều phối và định tuyến 28 mã lệnh nghiệp vụ")
 add_p("Tiểu trình ClientHandler tiếp nhận thông điệp từ Socket con, trích xuất mã lệnh (command), token xác thực và tham số dữ liệu. Hệ thống sử dụng bảng ánh xạ hàm (Handler Map) để điều phối đến đúng dịch vụ nghiệp vụ tương ứng, đồng thời thực thi kiểm tra quyền hạn (Role-based Access Control - RBAC) nghiêm ngặt trước khi cho phép thao tác:")
 
 code_handler = """# server/client_handler.py
@@ -446,10 +466,10 @@ class ClientHandler(threading.Thread):
             # ... Tổng cộng 28 mã lệnh nghiệp vụ
         }
         return handler_map.get(command, lambda: self._error("Lệnh không tồn tại"))()"""
-add_code_block(code_handler, "Hình 2.16: Mã nguồn định tuyến lệnh và kiểm tra quyền hạn (server/client_handler.py)")
+add_code_block(code_handler, "Hình 2.17: Mã nguồn định tuyến lệnh và kiểm tra quyền hạn (server/client_handler.py)")
 
-# 2.5.2.5
-add_h3("2.5.2.5. Cơ chế bảo mật xác thực Bcrypt và quản lý phiên Token")
+# 2.6.2.5
+add_h3("2.6.2.5. Cơ chế bảo mật xác thực Bcrypt và quản lý phiên Token")
 add_p("Hệ thống áp dụng thuật toán Bcrypt (chuẩn Blowfish) để băm mật khẩu một chiều với muối ngẫu nhiên trước khi lưu vào CSDL MySQL. Khi người dùng đăng nhập thành công, máy chủ sinh một chuỗi ngẫu nhiên chuẩn UUID phiên bản 4 (Token) và lưu trữ trên bộ nhớ RAM của AuthService:")
 
 code_auth = """# server/service/auth_service.py
@@ -472,10 +492,10 @@ class AuthService:
             'full_name': user['full_name'], 'role': user['role']
         }
         return True, "Đăng nhập thành công", {'token': token, 'user': self._sessions[token]}"""
-add_code_block(code_auth, "Hình 2.17: Mã nguồn xác thực Bcrypt và sinh Token phiên (server/service/auth_service.py)")
+add_code_block(code_auth, "Hình 2.18: Mã nguồn xác thực Bcrypt và sinh Token phiên (server/service/auth_service.py)")
 
-# 2.5.2.6
-add_h3("2.5.2.6. Phân tích các luồng tương tác mạng cốt lõi giữa hai máy Client – Server")
+# 2.6.2.6
+add_h3("2.6.2.6. Phân tích các luồng tương tác mạng cốt lõi giữa hai máy Client – Server")
 add_p("Hệ thống QuizApp hỗ trợ triển khai thực tế trên hai máy tính độc lập kết nối qua mạng LAN (hoặc máy ảo/máy vật lý). Dưới đây là phân tích chi tiết luồng trao đổi gói tin TCP giữa hai máy tính trong ba tình huống nghiệp vụ quan trọng nhất:")
 
 add_p("1. Luồng nghiệp vụ Đăng nhập hệ thống (Lệnh LOGIN):", bold_prefix="• ")
@@ -493,11 +513,11 @@ add_bullet("Khi sinh viên nhấn 'Nộp bài' (hoặc đồng hồ về 00:00),
 add_bullet("Server thực hiện đối chiếu song song với đáp án gốc trong CSDL MySQL, tính điểm theo thang 10, lưu vào bảng exam_results và exam_answers trong một giao dịch cơ sở dữ liệu an toàn.")
 add_bullet("Server gửi phản hồi kết quả tức thì (Điểm số, số câu đúng / tổng số câu). Client hiển thị thông báo chúc mừng và cập nhật bảng lịch sử thi.")
 
-# 2.6
-add_h2("2.6. Kết chương 2")
-add_p("Chương 2 đã trình bày một cách có hệ thống, toàn diện và sâu sắc quá trình phân tích và thiết kế hệ thống ứng dụng thi trắc nghiệm trực tuyến QuizApp dựa trên nền tảng lập trình mạng máy tính. Chương đã làm rõ cơ sở lý thuyết của mô hình Client–Server, cơ chế hoạt động của giao thức TCP, vai trò cốt lõi của Socket API, cùng quy trình chuẩn để xây dựng và triển khai một hệ thống giao tiếp mạng hai chiều.")
+# 2.7
+add_h2("2.7. Kết chương 2")
+add_p("Chương 2 đã trình bày một cách có hệ thống, toàn diện và sâu sắc quá trình phân tích và thiết kế hệ thống ứng dụng thi trắc nghiệm trực tuyến QuizApp dựa trên nền tảng lập trình mạng máy tính. Chương đã làm rõ kiến trúc phân tầng 3-tier, các giao thức mạng chủ đạo, topology hình sao và các tính năng chống gian lận đặc thù; đồng thời phân tích sâu sắc cơ chế hoạt động của giao thức TCP, Socket API, cùng quy trình chuẩn để xây dựng và triển khai một hệ thống giao tiếp mạng hai chiều.")
 
-add_p("Đặc biệt, chương đã phân tích chi tiết giải pháp Server đa tuyến (Multi-threaded Concurrency) giúp hệ thống đáp ứng khối lượng lớn người dùng cùng lúc; đồng thời làm rõ việc vận dụng sáng tạo các giao thức vào dự án QuizApp: từ kiến trúc phân tầng 3-tier, giao thức đóng gói phân mảnh 4-byte Length-Prefix, bộ điều phối 28 mã lệnh nghiệp vụ, cho đến các cơ chế bảo mật xác thực bằng thuật toán Bcrypt và Session Token UUID. Tất cả các nội dung đều được minh chứng trực tiếp bằng các đoạn mã nguồn và sơ đồ kỹ thuật trích xuất từ dự án thực tế.")
+add_p("Đặc biệt, chương đã làm sáng tỏ giải pháp Server đa tuyến (Multi-threaded Concurrency) giúp hệ thống đáp ứng khối lượng lớn thí sinh dự thi cùng lúc; phân tích cơ chế đóng gói phân mảnh 4-byte Length-Prefix, bộ điều phối 28 mã lệnh nghiệp vụ, cùng các cơ chế bảo mật xác thực bằng thuật toán Bcrypt và Session Token UUID. Tất cả các nội dung đều được minh chứng trực tiếp bằng các đoạn mã nguồn và sơ đồ kỹ thuật trích xuất từ dự án thực tế.")
 
 add_p("Những kết quả phân tích và thiết kế khoa học trong chương này chính là kim chỉ nam vững chắc để tiến hành cài đặt, triển khai và kiểm thử hệ thống trên môi trường thực nghiệm trong Chương 3 tiếp theo.")
 
