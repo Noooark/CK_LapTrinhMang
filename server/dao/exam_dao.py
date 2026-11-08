@@ -4,6 +4,7 @@ Exam Data Access Object - CRUD operations for exams and exam_questions tables.
 
 import logging
 from datetime import datetime
+from common.camera import CAMERA_THRESHOLDS
 from server.database import DatabaseConnection
 
 logger = logging.getLogger(__name__)
@@ -102,12 +103,16 @@ class ExamDAO:
                 with conn.cursor() as cur:
                     cur.execute(
                         "INSERT INTO exams (title, subject_id, teacher_id, duration_minutes, "
-                        "total_questions, status) VALUES (%s, %s, %s, %s, %s, %s)",
+                        "total_questions, status, camera_required, snapshot_enabled, no_face_threshold_seconds, "
+                        "multiple_faces_threshold_seconds, camera_disconnect_threshold_seconds, "
+                        "obstruction_threshold_seconds) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                         (
                             data['title'], data['subject_id'], data['teacher_id'],
                             data.get('duration_minutes', 30),
                             data.get('total_questions', 0),
-                            data.get('status', 'DRAFT')
+                            data.get('status', 'DRAFT'), data.get('camera_required', False),
+                            data.get('snapshot_enabled', False),
+                            *(data.get(key, default) for key, default in CAMERA_THRESHOLDS.values())
                         )
                     )
                     return cur.lastrowid
@@ -154,12 +159,12 @@ class ExamDAO:
                 with conn.cursor() as cur:
                     if status == 'ACTIVE':
                         cur.execute(
-                            "UPDATE exams SET status=%s, start_time=NOW() WHERE id=%s",
+                            "UPDATE exams SET status=%s, start_time=NOW() WHERE id=%s AND status='DRAFT'",
                             (status, exam_id)
                         )
                     elif status == 'ENDED':
                         cur.execute(
-                            "UPDATE exams SET status=%s, end_time=NOW() WHERE id=%s",
+                            "UPDATE exams SET status=%s, end_time=NOW() WHERE id=%s AND status='ACTIVE'",
                             (status, exam_id)
                         )
                     else:
@@ -203,28 +208,32 @@ class ExamDAO:
         try:
             with DatabaseConnection() as conn:
                 with conn.cursor() as cur:
-                    if include_answer:
-                        cur.execute(
-                            "SELECT q.*, eq.order_number "
-                            "FROM exam_questions eq "
-                            "JOIN questions q ON eq.question_id = q.id "
-                            "WHERE eq.exam_id = %s ORDER BY eq.order_number",
-                            (exam_id,)
-                        )
-                    else:
-                        # Hide correct_answer for students during exam
-                        cur.execute(
-                            "SELECT q.id, q.content, q.option_a, q.option_b, "
-                            "q.option_c, q.option_d, q.difficulty, eq.order_number "
-                            "FROM exam_questions eq "
-                            "JOIN questions q ON eq.question_id = q.id "
-                            "WHERE eq.exam_id = %s ORDER BY eq.order_number",
-                            (exam_id,)
-                        )
-                    return cur.fetchall()
+                    return ExamDAO.read_questions(cur, exam_id, include_answer)
         except Exception as e:
             logger.error(f"Error getting exam questions: {e}")
             return []
+
+    @staticmethod
+    def read_questions(cur, exam_id, include_answer):
+        if include_answer:
+            cur.execute(
+                "SELECT q.*, eq.order_number "
+                "FROM exam_questions eq "
+                "JOIN questions q ON eq.question_id = q.id "
+                "WHERE eq.exam_id = %s ORDER BY eq.order_number",
+                (exam_id,)
+            )
+        else:
+            # Hide correct_answer for students during exam
+            cur.execute(
+                "SELECT q.id, q.content, q.option_a, q.option_b, "
+                "q.option_c, q.option_d, q.difficulty, eq.order_number "
+                "FROM exam_questions eq "
+                "JOIN questions q ON eq.question_id = q.id "
+                "WHERE eq.exam_id = %s ORDER BY eq.order_number",
+                (exam_id,)
+            )
+        return cur.fetchall()
 
     @staticmethod
     def count() -> int:

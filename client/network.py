@@ -1,10 +1,12 @@
 import os
 import socket
+import ssl
 import threading
 import configparser
 from typing import Optional, Dict, Any
 
-from common.protocol import send_message, receive_message, Request, Response
+from common.snapshots import SNAPSHOT_COMMANDS
+from common.protocol import send_message, receive_message, Request
 
 
 class ServerConnection:
@@ -12,12 +14,13 @@ class ServerConnection:
     Thread-safe client TCP connection manager to communicate with QuizServer.
     """
 
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, tls_ca=None):
         self.host = host
         self.port = port
         self.sock: Optional[socket.socket] = None
         self._lock = threading.Lock()
         self._is_connected = False
+        self.tls_ca = tls_ca if tls_ca is not None else os.getenv("QUIZ_TLS_CA")
 
         if not self.host or not self.port:
             self._load_config()
@@ -52,42 +55,33 @@ class ServerConnection:
         Returns True if successful, False otherwise.
         """
         with self._lock:
-            if self.is_connected:
-                return True
-
             try:
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.settimeout(10.0)  # 10s connect/read timeout
-                self.sock.connect((self.host, int(self.port)))
-                self._is_connected = True
-                print(f"[Network] Connected to server at {self.host}:{self.port}")
+                self._connect_locked()
                 return True
-            except (socket.error, OSError) as e:
-                print(f"[Network] Failed to connect to {self.host}:{self.port}: {e}")
-                self._is_connected = False
-                if self.sock:
-                    try:
-                        self.sock.close()
-                    except Exception:
-                        pass
-                    self.sock = None
+            except (OSError, ValueError):
                 return False
 
+    def _connect_locked(self):
+        if not self.is_connected:
+            context = ssl.create_default_context(cafile=self.tls_ca) if self.tls_ca else None
+            sock = socket.create_connection((self.host, int(self.port)), timeout=10.0)
+            try:
+                self.sock = context.wrap_socket(sock, server_hostname=self.host) if context else sock
+            except (OSError, ValueError):
+                sock.close()
+                raise
+            self._is_connected = True
+
+    def _disconnect_locked(self):
+        self._is_connected = False
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
+
     def disconnect(self):
-        """Disconnects cleanly from the server."""
+        """Close the socket after any active request completes."""
         with self._lock:
-            self._is_connected = False
-            if self.sock:
-                try:
-                    self.sock.shutdown(socket.SHUT_RDWR)
-                except Exception:
-                    pass
-                try:
-                    self.sock.close()
-                except Exception:
-                    pass
-                self.sock = None
-                print("[Network] Disconnected from server.")
+            self._disconnect_locked()
 
     def send_request(
         self,
@@ -100,53 +94,23 @@ class ServerConnection:
         Returns response dictionary: {"status": "SUCCESS"/"ERROR", "message": "...", "data": ...}
         """
         with self._lock:
-            if not self.is_connected:
-                # Try auto-reconnect
-                try:
-                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    self.sock.settimeout(10.0)
-                    self.sock.connect((self.host, int(self.port)))
-                    self._is_connected = True
-                except Exception as e:
-                    return {
-                        "status": "ERROR",
-                        "message": f"Không thể kết nối tới máy chủ ({e})",
-                        "data": None
-                    }
-
-            req = Request(command=command, token=token, data=data or {})
-
             try:
-                success = send_message(self.sock, req)
-                if not success:
-                    self._is_connected = False
-                    return {
-                        "status": "ERROR",
-                        "message": "Không thể gửi dữ liệu tới máy chủ",
-                        "data": None
-                    }
+                self._connect_locked()
+                if command in SNAPSHOT_COMMANDS and not isinstance(self.sock, ssl.SSLSocket):
+                    return {"status": "ERROR", "message": "Ảnh bằng chứng yêu cầu TLS.", "data": None}
+                request = Request(command=command, token=token, data=data or {})
+                if send_message(self.sock, request):
+                    response = receive_message(self.sock)
+                    if isinstance(response, dict):
+                        return response
+            except (OSError, ValueError):
+                pass
 
-                response_dict = receive_message(self.sock)
-                if response_dict is None:
-                    self._is_connected = False
-                    return {
-                        "status": "ERROR",
-                        "message": "Mất kết nối hoặc máy chủ đóng kết nối",
-                        "data": None
-                    }
-
-                return response_dict
-
-            except (socket.timeout, socket.error, OSError) as e:
-                self._is_connected = False
-                if self.sock:
-                    try:
-                        self.sock.close()
-                    except Exception:
-                        pass
-                    self.sock = None
-                return {
-                    "status": "ERROR",
-                    "message": f"Lỗi giao tiếp máy chủ: {e}",
-                    "data": None
-                }
+            # A timeout can leave part of a frame unread. Reconnect on the next request.
+            self._disconnect_locked()
+            return {
+                "status": "ERROR",
+                "message": "Không thể liên lạc với máy chủ. Vui lòng thử lại.",
+                "data": None,
+                "transport_error": True,
+            }

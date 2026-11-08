@@ -21,7 +21,8 @@ class SubjectDialog(ctk.CTkToplevel):
         token: str,
         subject_data: Optional[Dict[str, Any]] = None,
         teachers: Optional[List[Dict[str, Any]]] = None,
-        on_save_success=None
+        on_save_success=None,
+        allow_teacher_assignment=True,
     ):
         super().__init__(parent)
         self.connection = connection
@@ -29,6 +30,7 @@ class SubjectDialog(ctk.CTkToplevel):
         self.subject_data = subject_data
         self.teachers = teachers or []
         self.on_save_success = on_save_success
+        self.allow_teacher_assignment = allow_teacher_assignment
         self.is_edit = subject_data is not None
 
         self.title("Chỉnh sửa môn học" if self.is_edit else "Thêm môn học mới")
@@ -74,8 +76,6 @@ class SubjectDialog(ctk.CTkToplevel):
         self.name_entry.grid(row=1, column=0, sticky="ew", pady=(0, 10))
 
         # Teacher In Charge
-        ctk.CTkLabel(form_frame, text="Giáo viên phụ trách:", font=("Helvetica", 12, "bold")).grid(row=2, column=0, sticky="w", pady=(5, 2))
-
         # Prepare teacher options
         self.teacher_map = {}
         teacher_names = ["-- Chưa phân công --"]
@@ -85,13 +85,11 @@ class SubjectDialog(ctk.CTkToplevel):
             self.teacher_map[display_name] = t.get("id")
 
         self.teacher_var = ctk.StringVar(value=teacher_names[0])
-        self.teacher_menu = ctk.CTkOptionMenu(
-            form_frame,
-            values=teacher_names,
-            variable=self.teacher_var,
-            height=36
-        )
-        self.teacher_menu.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        if self.allow_teacher_assignment:
+            ctk.CTkLabel(form_frame, text="Giáo viên phụ trách:", font=("Helvetica", 12, "bold")).grid(
+                row=2, column=0, sticky="w", pady=(5, 2))
+            ctk.CTkOptionMenu(form_frame, values=teacher_names, variable=self.teacher_var, height=36).grid(
+                row=3, column=0, sticky="ew", pady=(0, 10))
 
         # Description
         ctk.CTkLabel(form_frame, text="Mô tả môn học:", font=("Helvetica", 12, "bold")).grid(row=4, column=0, sticky="w", pady=(5, 2))

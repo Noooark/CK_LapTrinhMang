@@ -20,14 +20,21 @@
 - Tải và cài đặt MySQL 8.0: https://dev.mysql.com/downloads/
 - Hoặc dùng XAMPP: https://www.apachefriends.org/
 
-### 2. Tạo Database
-```bash
-mysql -u root -p < database/schema.sql
+### 2. Tạo database và áp dụng migration
+
+Chạy từ thư mục gốc dự án. Với database mới, nạp schema rồi áp dụng lần lượt bốn migration bên dưới. Với database đã có dữ liệu, chỉ áp dụng các migration còn thiếu, theo cùng thứ tự.
+
+```powershell
+mysql -u root -p --execute="SOURCE database/schema.sql"
+mysql -u root -p --database=quiz_app --execute="SOURCE database/migrations/add_proctoring.sql"
+mysql -u root -p --database=quiz_app --execute="SOURCE database/migrations/add_camera_proctoring.sql"
+mysql -u root -p --database=quiz_app --execute="SOURCE database/migrations/add_camera_evidence.sql"
+mysql -u root -p --database=quiz_app --execute="SOURCE database/migrations/add_camera_phone_detection.sql"
 ```
 
 ### 3. Cài đặt thư viện Python
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ### 4. Cấu hình
@@ -60,6 +67,21 @@ python -m server.main
 ```bash
 python -m client.main
 ```
+
+## Môn học và giám sát
+
+- Ba môn ban đầu là dữ liệu mẫu. **Giáo viên → Quản lý đề thi → Thêm môn học** tạo môn do giáo viên đang đăng nhập phụ trách. Môn mới xuất hiện trong danh sách chọn khi tạo đề. **Admin → Quản lý môn học** quản lý môn và phân công giáo viên.
+- Màn hình thi phóng to trong vùng làm việc Windows, giữ nút **X** và Taskbar. Rời cửa sổ từ 2,5 giây tạo cảnh báo. Các cảnh báo hiện giữa màn hình, có nút **Tiếp tục làm bài**. [Giám sát cửa sổ và heartbeat](docs/ANTI_CHEAT_PHASE1.md)
+- Đề yêu cầu webcam có bước kiểm tra trước khi thi. Camera phát hiện thiếu khuôn mặt, nhiều khuôn mặt, ảnh khó quan sát và mất tín hiệu. Mô hình YOLOX bổ sung nhận diện điện thoại theo nhiều góc. [Giám sát camera](docs/ANTI_CHEAT_PHASE2_CAMERA.md)
+- Với đề bật **Bắt buộc lưu ảnh bằng chứng**, học viên chấp nhận điều kiện khi bật camera. Ảnh cảnh báo được gửi qua TLS và giáo viên phụ trách bấm **👁** để xem. [Cài TLS, tải mô hình điện thoại và demo hai Client](docs/CAMERA_EVIDENCE.md)
+
+### Cài hỗ trợ webcam trên máy học viên
+
+```powershell
+python -m pip install --only-binary=:all: -r requirements-camera.txt
+```
+
+Trên Windows, bật quyền truy cập camera cho ứng dụng desktop trong **Settings → Privacy & security → Camera**. Để nhận diện điện thoại, tải thêm mô hình ONNX theo [hướng dẫn ảnh bằng chứng](docs/CAMERA_EVIDENCE.md#cảnh-báo-điện-thoại). Với Python Launcher trên Windows, có thể dùng `py` thay cho `python`.
 
 ## 👤 Tài khoản mặc định
 

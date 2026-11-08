@@ -6,6 +6,7 @@ from client.ui.utils import PRIMARY_COLOR, PRIMARY_HOVER, DANGER_COLOR, ask_yes_
 from client.ui.teacher.question_bank import QuestionBankPanel
 from client.ui.teacher.exam_creator import ExamCreatorPanel
 from client.ui.teacher.result_viewer import ResultViewerPanel
+from client.ui.teacher.monitoring_panel import MonitoringPanel
 
 
 class TeacherDashboard(ctk.CTkFrame):
@@ -86,6 +87,7 @@ class TeacherDashboard(ctk.CTkFrame):
             ("questions", "📝 Ngân hàng câu hỏi"),
             ("exams", "📋 Quản lý đề thi"),
             ("results", "📊 Xem kết quả thi"),
+            ("monitoring", "Giám sát kỳ thi"),
         ]
 
         for idx, (key, label) in enumerate(menu_items, start=2):
@@ -154,6 +156,9 @@ class TeacherDashboard(ctk.CTkFrame):
                 connection=self.connection,
                 token=self.token
             )
+
+        elif panel_name == "monitoring":
+            self.current_panel = MonitoringPanel(self.content_container, self.connection, self.token)
 
         if self.current_panel:
             self.current_panel.grid(row=0, column=0, sticky="nsew")
