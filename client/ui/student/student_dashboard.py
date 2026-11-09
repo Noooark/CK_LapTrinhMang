@@ -2,7 +2,8 @@ from typing import Callable, Dict, Any, Optional
 import customtkinter as ctk
 
 from client.network import ServerConnection
-from client.ui.utils import PRIMARY_COLOR, PRIMARY_HOVER, DANGER_COLOR, ask_yes_no
+from client.ui.utils import PRIMARY_COLOR, DANGER_COLOR, ask_yes_no, show_error
+from client.ui.student.camera_check_dialog import CameraCheckDialog
 from client.ui.student.exam_list import ExamListPanel
 from client.ui.student.result_history import ResultHistoryPanel
 from client.ui.student.change_password import ChangePasswordPanel
@@ -129,15 +130,7 @@ class StudentDashboard(ctk.CTkFrame):
 
     def _show_panel(self, panel_name: str):
         if self.in_exam_mode:
-            confirm = ask_yes_no(
-                "Đang làm bài thi",
-                "Bạn đang trong phòng thi! Rời khỏi màn hình này có thể làm gián đoạn bài thi.\nBạn có chắc muốn rời khỏi?",
-                parent=self
-            )
-            if not confirm:
-                return
-
-        self.in_exam_mode = False
+            return
 
         for key, btn in self.menu_buttons.items():
             if key == panel_name:
@@ -173,8 +166,21 @@ class StudentDashboard(ctk.CTkFrame):
             self.current_panel.grid(row=0, column=0, sticky="nsew")
 
     def _start_exam_taking(self, exam_data: Dict[str, Any]):
+        retention_days = exam_data.get("snapshot_retention_days")
+        if exam_data.get("snapshot_enabled") and not retention_days:
+            show_error("Chưa thể vào thi", "Đề thi yêu cầu lưu ảnh bằng chứng nhưng kết nối bảo mật "
+                       "hoặc thư mục lưu ảnh chưa sẵn sàng. Vui lòng liên hệ giáo viên.", parent=self)
+            return
+        if exam_data.get("camera_required"):
+            CameraCheckDialog(self, lambda camera: self._open_exam(exam_data, camera),
+                              retention_days=retention_days)
+        else:
+            self._open_exam(exam_data)
+
+    def _open_exam(self, exam_data, camera=None):
         """Switches content area to the interactive ExamTakingPanel."""
         self.in_exam_mode = True
+        self.sidebar.grid_remove()
 
         # Unselect all menu buttons during exam
         for btn in self.menu_buttons.values():
@@ -189,6 +195,7 @@ class StudentDashboard(ctk.CTkFrame):
             connection=self.connection,
             token=self.token,
             exam_data=exam_data,
+            camera=camera,
             on_submitted=self._on_exam_submitted
         )
         self.current_panel.grid(row=0, column=0, sticky="nsew")
@@ -196,18 +203,21 @@ class StudentDashboard(ctk.CTkFrame):
     def _on_exam_submitted(self, result_data: Dict[str, Any]):
         """Callback when an exam has been submitted."""
         self.in_exam_mode = False
-        # Automatically navigate to history panel to view results
-        self._show_panel("history")
+        if result_data.get("close_window"):
+            self.winfo_toplevel().on_closing()
+            return
+        self.sidebar.grid()
+        self._show_panel("exams" if result_data.get("status") == "ABORTED" else "history")
+
+    def request_close(self):
+        if self.in_exam_mode:
+            self.current_panel.request_close()
+            return True
+        return False
 
     def _handle_logout(self):
         if self.in_exam_mode:
-            confirm = ask_yes_no(
-                "Đang làm bài",
-                "Bạn đang trong bài thi! Đăng xuất sẽ hủy bài thi hiện tại.\nBạn có chắc muốn đăng xuất?",
-                parent=self
-            )
-            if not confirm:
-                return
+            return
 
         confirm = ask_yes_no("Đăng xuất", "Bạn có chắc chắn muốn đăng xuất?", parent=self)
         if confirm:

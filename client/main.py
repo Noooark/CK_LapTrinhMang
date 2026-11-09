@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import threading
@@ -137,15 +138,14 @@ class QuizApp(ctk.CTk):
 
     def on_closing(self):
         """Gracefully disconnects network socket and closes application window."""
-        try:
-            if self.connection:
-                self.connection.disconnect()
-        except Exception:
-            pass
+        if isinstance(self.current_view, StudentDashboard) and self.current_view.request_close():
+            return
+        threading.Thread(target=self.connection.disconnect, daemon=True).start()
         self.destroy()
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     # Appearance and theme configuration
     ctk.set_appearance_mode("Dark")
     ctk.set_default_color_theme("blue")

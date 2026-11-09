@@ -5,9 +5,10 @@ from typing import Dict, Any, Optional, List, Callable
 import customtkinter as ctk
 
 from client.network import ServerConnection
+from client.ui.student.exam_notice import exam_notice
 from client.ui.utils import (
     PRIMARY_COLOR, PRIMARY_HOVER, SUCCESS_COLOR, WARNING_COLOR,
-    style_treeview, show_error, show_info, show_warning, ask_yes_no
+    style_treeview, show_error, show_info, show_warning
 )
 
 
@@ -31,6 +32,7 @@ class ExamListPanel(ctk.CTkFrame):
 
         self.exams_cache: List[Dict[str, Any]] = []
         self.taken_exam_ids = set()
+        self.start_notice = None
 
         self._build_ui()
         self.refresh_data()
@@ -219,6 +221,8 @@ class ExamListPanel(ctk.CTkFrame):
         return None
 
     def _start_exam_action(self):
+        if self.start_notice is not None:
+            return
         exam = self._get_selected_exam()
         if not exam:
             show_warning("Chưa chọn bài thi", "Vui lòng chọn bài thi bạn muốn tham gia!", parent=self)
@@ -239,15 +243,28 @@ class ExamListPanel(ctk.CTkFrame):
             return
 
         dur = exam.get("duration_minutes", 30)
-        confirm = ask_yes_no(
-            "Xác nhận vào thi",
-            f"Bạn có chắc muốn bắt đầu bài thi: '{exam.get('title')}'?\n"
-            f"Thời gian làm bài: {dur} phút.\n"
-            "Đồng hồ đếm ngược sẽ bắt đầu chạy ngay khi vào thi!",
-            parent=self
+        camera = "\nĐề thi này yêu cầu kiểm tra camera trước khi bắt đầu." if exam.get("camera_required") else ""
+        self.start_notice, card = exam_notice(
+            self, "Xác nhận vào thi",
+            f"{exam.get('title')}\nThời gian làm bài: {dur} phút.{camera}\n\n"
+            "Hệ thống ghi nhận việc rời cửa sổ, yêu cầu đóng cửa sổ và mất kết nối trong lúc thi. "
+            "Giáo viên phụ trách có thể xem các cảnh báo.",
+            PRIMARY_COLOR,
         )
-        if confirm:
-            self.on_start_exam(exam)
+        actions = ctk.CTkFrame(card, fg_color="transparent")
+        actions.pack(pady=(4, 20))
+        ctk.CTkButton(actions, text="Quay lại", fg_color="gray40",
+                      command=self._dismiss_start_notice).pack(side="left", padx=6)
+        ctk.CTkButton(actions, text="Đồng ý vào thi",
+                      command=lambda: self._confirm_start(exam)).pack(side="left", padx=6)
+
+    def _dismiss_start_notice(self):
+        self.start_notice.destroy()
+        self.start_notice = None
+
+    def _confirm_start(self, exam):
+        self._dismiss_start_notice()
+        self.on_start_exam(exam)
 
     def _on_error(self, err):
         self.status_label.configure(text=f"Lỗi: {err}")

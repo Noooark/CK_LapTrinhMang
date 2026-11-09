@@ -6,6 +6,8 @@ from tkinter import ttk, filedialog
 from typing import Dict, Any, Optional, List
 import customtkinter as ctk
 
+from common.camera import CAMERA_THRESHOLDS
+from client.ui.admin.subject_management import SubjectDialog
 from client.network import ServerConnection
 from client.ui.utils import (
     PRIMARY_COLOR, PRIMARY_HOVER, DANGER_COLOR, SUCCESS_COLOR, WARNING_COLOR,
@@ -413,6 +415,22 @@ class CreateExamDialog(ctk.CTkToplevel):
         self.duration_entry.grid(row=1, column=1, sticky="ew")
         self.duration_entry.insert(0, "30")
 
+        camera = ctk.CTkFrame(row2, fg_color="transparent")
+        camera.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self.camera_required = ctk.CTkCheckBox(camera, text="Yêu cầu camera khi thi")
+        self.camera_required.grid(row=0, column=0, columnspan=2, sticky="w")
+        self.snapshot_enabled = ctk.CTkCheckBox(camera, text="Bắt buộc lưu ảnh bằng chứng")
+        self.snapshot_enabled.grid(row=0, column=2, columnspan=2, sticky="w")
+        self.camera_threshold_entries = {}
+        labels = ("Vắng mặt", "Nhiều người", "Mất tín hiệu", "Ảnh khó quan sát")
+        for column, (label, (key, default)) in enumerate(zip(labels, CAMERA_THRESHOLDS.values())):
+            camera.grid_columnconfigure(column, weight=1)
+            ctk.CTkLabel(camera, text=f"{label} (giây)").grid(row=1, column=column, sticky="w")
+            entry = ctk.CTkEntry(camera, width=70)
+            entry.insert(0, str(default))
+            entry.grid(row=2, column=column, sticky="w", padx=(0, 4))
+            self.camera_threshold_entries[key] = entry
+
         # Mode Selection Tab
         ctk.CTkLabel(container, text="Phương thức chọn câu hỏi:", font=("Helvetica", 12, "bold")).grid(row=3, column=0, sticky="w", pady=(5, 4))
         self.mode_var = ctk.StringVar(value="RANDOM")
@@ -736,12 +754,28 @@ class CreateExamDialog(ctk.CTkToplevel):
 
         self.create_btn.configure(state="disabled", text="Đang tạo...")
 
+        try:
+            camera_thresholds = {key: int(entry.get()) for key, entry in self.camera_threshold_entries.items()}
+            if not all(1 <= seconds <= 300 for seconds in camera_thresholds.values()):
+                raise ValueError
+        except ValueError:
+            show_error("Ngưỡng camera không hợp lệ", "Nhập số nguyên từ 1 đến 300 giây.", parent=self)
+            return
+        camera_required = bool(self.camera_required.get())
+        snapshot_enabled = bool(self.snapshot_enabled.get())
+        if snapshot_enabled and not camera_required:
+            show_error("Cấu hình camera", "Bật yêu cầu camera trước khi cho phép lưu ảnh.", parent=self)
+            return
+
         def worker():
             try:
                 payload = {
                     "title": title,
                     "subject_id": subj_id,
                     "duration_minutes": duration,
+                    "camera_required": camera_required,
+                    "snapshot_enabled": snapshot_enabled,
+                    **camera_thresholds,
                     "total_questions": total_questions,
                     "question_ids": question_ids,
                     "new_questions": new_questions,
@@ -800,6 +834,9 @@ class ExamCreatorPanel(ctk.CTkFrame):
         ).grid(row=0, column=0, sticky="w")
 
         # 2. Controls & Actions Toolbar
+        ctk.CTkButton(header, text="➕ Thêm môn học", command=self._open_subject_dialog).grid(
+            row=0, column=1, sticky="e",
+        )
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
         toolbar.grid_columnconfigure(0, weight=1)
@@ -1044,6 +1081,10 @@ class ExamCreatorPanel(ctk.CTkFrame):
             exam_data=exam,
             subjects=self.subjects_cache
         )
+
+    def _open_subject_dialog(self):
+        SubjectDialog(self, self.connection, self.token, on_save_success=self.refresh_data,
+                      allow_teacher_assignment=False)
 
     def _open_create_dialog(self):
         CreateExamDialog(

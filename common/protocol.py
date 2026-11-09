@@ -31,6 +31,14 @@ class CommandType(str, Enum):
     GET_AVAILABLE_EXAMS = "GET_AVAILABLE_EXAMS"
     GET_EXAM_QUESTIONS = "GET_EXAM_QUESTIONS"
     SUBMIT_EXAM = "SUBMIT_EXAM"
+    START_EXAM_ATTEMPT = "START_EXAM_ATTEMPT"
+    REPORT_EXAM_EVENT = "REPORT_EXAM_EVENT"
+    UPLOAD_EXAM_SNAPSHOT = "UPLOAD_EXAM_SNAPSHOT"
+    GET_EXAM_SNAPSHOT = "GET_EXAM_SNAPSHOT"
+    EXAM_HEARTBEAT = "EXAM_HEARTBEAT"
+    GET_MONITORING_STATUS = "GET_MONITORING_STATUS"
+    GET_EXAM_EVENTS = "GET_EXAM_EVENTS"
+    ACKNOWLEDGE_EXAM_EVENT = "ACKNOWLEDGE_EXAM_EVENT"
     GET_RESULTS = "GET_RESULTS"
     GET_MY_RESULTS = "GET_MY_RESULTS"
     GET_EXAM_RESULTS = "GET_EXAM_RESULTS"
@@ -116,7 +124,7 @@ def send_message(sock: socket.socket, obj: Any) -> bool:
         return False
 
 
-def receive_message(sock: socket.socket) -> Optional[dict]:
+def receive_message(sock: socket.socket, max_bytes: int | None = None) -> Optional[dict]:
     """
     Read 4-byte length prefix, then read full payload and parse JSON.
     Returns dict or None on error/disconnection.
@@ -126,6 +134,8 @@ def receive_message(sock: socket.socket) -> Optional[dict]:
         if not header or len(header) < 4:
             return None
         length = struct.unpack(">I", header)[0]
+        if max_bytes is not None and length > max_bytes:
+            return None
         payload = _recvall(sock, length)
         if payload is None or len(payload) < length:
             return None

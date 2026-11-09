@@ -21,48 +21,28 @@ class ResultDAO:
         return row
 
     @staticmethod
-    def create_result(data: dict) -> int | None:
-        """Create an exam result record."""
-        try:
-            with DatabaseConnection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO exam_results (exam_id, student_id, correct_count, "
-                        "total_questions, score) VALUES (%s, %s, %s, %s, %s)",
-                        (
-                            data['exam_id'], data['student_id'],
-                            data['correct_count'], data['total_questions'],
-                            data['score']
-                        )
-                    )
-                    return cur.lastrowid
-        except Exception as e:
-            logger.error(f"Error creating result: {e}")
-            return None
+    def find_submission(cur, exam_id, student_id, current=False):
+        locking = " FOR UPDATE" if current else ""
+        cur.execute(
+            "SELECT id AS result_id, correct_count, total_questions, score FROM exam_results "
+            "WHERE exam_id = %s AND student_id = %s" + locking,
+            (exam_id, student_id)
+        )
+        return cur.fetchone()
 
     @staticmethod
-    def save_answers(result_id: int, answers: list) -> bool:
-        """Save individual question answers for a result.
-        
-        answers: list of dicts with {question_id, selected_answer, is_correct}
-        """
-        try:
-            with DatabaseConnection() as conn:
-                with conn.cursor() as cur:
-                    for ans in answers:
-                        cur.execute(
-                            "INSERT INTO exam_answers (result_id, question_id, "
-                            "selected_answer, is_correct) VALUES (%s, %s, %s, %s)",
-                            (
-                                result_id, ans['question_id'],
-                                ans.get('selected_answer', ''),
-                                ans.get('is_correct', False)
-                            )
-                        )
-                    return True
-        except Exception as e:
-            logger.error(f"Error saving answers: {e}")
-            return False
+    def insert_submission(cur, exam_id, student_id, correct, total, score, records):
+        cur.execute(
+            "INSERT INTO exam_results (exam_id, student_id, correct_count, total_questions, score) "
+            "VALUES (%s, %s, %s, %s, %s)", (exam_id, student_id, correct, total, score)
+        )
+        result_id = cur.lastrowid
+        cur.executemany(
+            "INSERT INTO exam_answers (result_id, question_id, selected_answer, is_correct) "
+            "VALUES (%s, %s, %s, %s)",
+            [(result_id, *record) for record in records]
+        )
+        return result_id
 
     @staticmethod
     def get_results_by_exam(exam_id: int) -> list:

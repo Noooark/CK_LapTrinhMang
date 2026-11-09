@@ -4,13 +4,17 @@ Each client connection runs in its own thread.
 """
 
 import threading
+import ssl
 import logging
+
+from pymysql import MySQLError, OperationalError
 
 from common.protocol import send_message, receive_message, CommandType
 from server.service.auth_service import AuthService
 from server.service.user_service import UserService
 from server.service.question_service import QuestionService
 from server.service.exam_service import ExamService
+from server.service.proctoring_service import ProctoringService
 from server.dao.subject_dao import SubjectDAO
 
 logger = logging.getLogger(__name__)
@@ -19,11 +23,13 @@ logger = logging.getLogger(__name__)
 class ClientHandler(threading.Thread):
     """Handles communication with a single connected client."""
 
-    def __init__(self, client_socket, address, auth_service: AuthService):
+    def __init__(self, client_socket, address, auth_service: AuthService, tls_context=None, snapshots=None):
         super().__init__(daemon=True)
         self.client_socket = client_socket
         self.address = address
         self.auth_service = auth_service
+        self.tls_context = tls_context
+        self.snapshots = snapshots
         self.running = True
 
     def run(self):
@@ -32,8 +38,12 @@ class ClientHandler(threading.Thread):
         logger.info(f"[+] Client connected: {addr_str}")
 
         try:
+            if self.tls_context is not None:
+                self.client_socket.settimeout(5)
+                self.client_socket = self.tls_context.wrap_socket(self.client_socket, server_side=True)
+                self.client_socket.settimeout(None)
             while self.running:
-                request = receive_message(self.client_socket)
+                request = receive_message(self.client_socket, max_bytes=32 * 1024 * 1024)
                 if request is None:
                     logger.info(f"[-] Client disconnected: {addr_str}")
                     break
@@ -43,6 +53,8 @@ class ClientHandler(threading.Thread):
                     logger.warning(f"Failed to send response to {addr_str}")
                     break
 
+        except (ssl.SSLError, TimeoutError):
+            logger.warning("TLS handshake failed or timed out for %s", addr_str)
         except Exception as e:
             logger.error(f"Error handling client {addr_str}: {e}")
         finally:
@@ -50,9 +62,15 @@ class ClientHandler(threading.Thread):
 
     def _handle_request(self, request: dict) -> dict:
         """Route request to appropriate handler based on command."""
+        if not isinstance(request, dict):
+            return self._error("Yêu cầu không hợp lệ")
         command = request.get('command', '')
         token = request.get('token')
         data = request.get('data', {})
+        if not isinstance(command, str) or len(command) > 64 or not isinstance(data, dict):
+            return self._error("Yêu cầu không hợp lệ")
+        if token is not None and (not isinstance(token, str) or len(token) > 64):
+            return self._error("Phiên đăng nhập không hợp lệ")
 
         # --- LOGIN doesn't require authentication ---
         if command == CommandType.LOGIN:
@@ -77,7 +95,8 @@ class ClientHandler(threading.Thread):
 
                 # Subject management (ADMIN only)
                 CommandType.GET_SUBJECTS: lambda: self._handle_get_subjects(user),
-                CommandType.CREATE_SUBJECT: lambda: self._require_role(user, ['ADMIN'], lambda: self._handle_create_subject(data)),
+                CommandType.CREATE_SUBJECT: lambda: self._require_role(
+                    user, ['ADMIN', 'TEACHER'], lambda: self._handle_create_subject(data, user)),
                 CommandType.UPDATE_SUBJECT: lambda: self._require_role(user, ['ADMIN'], lambda: self._handle_update_subject(data)),
                 CommandType.DELETE_SUBJECT: lambda: self._require_role(user, ['ADMIN'], lambda: self._handle_delete_subject(data)),
 
@@ -92,14 +111,30 @@ class ClientHandler(threading.Thread):
                 CommandType.GET_EXAMS: lambda: ExamService.get_exams(data, user),
                 CommandType.CREATE_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.create_exam(data, user)),
                 CommandType.UPDATE_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.update_exam(data)),
-                CommandType.DELETE_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.delete_exam(data)),
-                CommandType.START_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.start_exam(data)),
-                CommandType.END_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.end_exam(data)),
+                CommandType.DELETE_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.delete_exam(data, user)),
+                CommandType.START_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.start_exam(data, user)),
+                CommandType.END_EXAM: lambda: self._require_role(user, ['ADMIN', 'TEACHER'], lambda: ExamService.end_exam(data, user)),
 
                 # Student exam operations
-                CommandType.GET_AVAILABLE_EXAMS: lambda: ExamService.get_available_exams(user),
+                CommandType.GET_AVAILABLE_EXAMS: lambda: self._available_exams(user),
                 CommandType.GET_EXAM_QUESTIONS: lambda: ExamService.get_exam_questions(data, user),
-                CommandType.SUBMIT_EXAM: lambda: self._require_role(user, ['STUDENT'], lambda: ExamService.submit_exam(data, user)),
+                CommandType.SUBMIT_EXAM: lambda: self._require_role(user, ['STUDENT'], lambda: ProctoringService.submit(data, user)),
+
+                CommandType.START_EXAM_ATTEMPT: lambda: self._require_role(
+                    user, ['STUDENT'], lambda: ProctoringService.start(data, user, self._snapshot_days())),
+                CommandType.REPORT_EXAM_EVENT: lambda: self._require_role(
+                    user, ['STUDENT'], lambda: ProctoringService.report_event(data, user)),
+                CommandType.EXAM_HEARTBEAT: lambda: self._require_role(
+                    user, ['STUDENT'], lambda: ProctoringService.heartbeat(data, user)),
+                CommandType.GET_MONITORING_STATUS: lambda: self._require_role(
+                    user, ['ADMIN', 'TEACHER'], lambda: ProctoringService.monitor(data, user, 'status')),
+                CommandType.GET_EXAM_EVENTS: lambda: self._require_role(
+                    user, ['ADMIN', 'TEACHER'], lambda: ProctoringService.monitor(data, user, 'history', bool(self._snapshot_days()))),
+                CommandType.ACKNOWLEDGE_EXAM_EVENT: lambda: self._require_role(
+                    user, ['ADMIN', 'TEACHER'], lambda: ProctoringService.monitor(data, user, 'ack')),
+
+                CommandType.UPLOAD_EXAM_SNAPSHOT: lambda: self._snapshot_request(data, user, upload=True),
+                CommandType.GET_EXAM_SNAPSHOT: lambda: self._snapshot_request(data, user, upload=False),
 
                 # Results
                 CommandType.GET_RESULTS: lambda: ExamService.get_results(data, user),
@@ -122,9 +157,33 @@ class ClientHandler(threading.Thread):
             else:
                 return self._error(f"Lệnh không hợp lệ: {command}")
 
-        except Exception as e:
-            logger.error(f"Error processing command '{command}': {e}", exc_info=True)
-            return self._error(f"Lỗi server: {str(e)}")
+        except MySQLError as exc:
+            logger.exception("Database error handling %s", command)
+            response = self._error("Lỗi cơ sở dữ liệu. Vui lòng thử lại.")
+            response["retryable"] = isinstance(exc, OperationalError)
+            return response
+        except Exception:
+            logger.exception("Error processing command %s", command)
+            return self._error("Lỗi máy chủ")
+
+    def _snapshot_days(self):
+        if self.snapshots and isinstance(self.client_socket, ssl.SSLSocket):
+            return self.snapshots.days
+        return None
+
+    def _available_exams(self, user):
+        success, message, exams = ExamService.get_available_exams(user)
+        days = self._snapshot_days()
+        for exam in exams:
+            exam["snapshot_retention_days"] = days if exam.get("snapshot_enabled") else None
+        return success, message, exams
+
+    def _snapshot_request(self, data, user, upload):
+        if self._snapshot_days() is None:
+            return False, "Ảnh bằng chứng yêu cầu kết nối TLS và cấu hình lưu ảnh.", None
+        if upload:
+            return self._require_role(user, ['STUDENT'], lambda: self.snapshots.upload(data, user))
+        return self._require_role(user, ['TEACHER', 'ADMIN'], lambda: self.snapshots.get(data, user))
 
     def _handle_login(self, data: dict) -> dict:
         """Handle login request."""
@@ -145,11 +204,15 @@ class ClientHandler(threading.Thread):
             subjects = SubjectDAO.find_all()
         return True, "Lấy danh sách môn học thành công", subjects
 
-    def _handle_create_subject(self, data: dict) -> tuple:
-        name = data.get('name', '').strip()
+    def _handle_create_subject(self, data: dict, user: dict) -> tuple:
+        value = data.get('name')
+        name = value.strip() if isinstance(value, str) else ""
         if not name:
             return False, "Tên môn học không được để trống", None
-        new_id = SubjectDAO.create(data)
+        if len(name) > 100:
+            return False, "Tên môn học tối đa 100 ký tự", None
+        teacher_id = user['id'] if user['role'] == 'TEACHER' else data.get('teacher_id')
+        new_id = SubjectDAO.create({**data, 'name': name, 'teacher_id': teacher_id})
         if new_id:
             return True, "Tạo môn học thành công", {'id': new_id}
         return False, "Lỗi khi tạo môn học", None

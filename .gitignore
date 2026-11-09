@@ -18,3 +18,9 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local camera evidence and TLS private keys
+server_data/
+*.key
+/models/*.onnx
+/models/*.onnx.download

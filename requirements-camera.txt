@@ -1,0 +1,2 @@
+# Optional student-client dependency. Tk renders the preview.
+opencv-python-headless==4.13.0.92

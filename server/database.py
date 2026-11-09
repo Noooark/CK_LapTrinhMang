@@ -68,9 +68,11 @@ class DatabaseConnection:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
-            if exc_type:
-                self.conn.rollback()
-            else:
-                self.conn.commit()
-            self.conn.close()
+            try:
+                if exc_type:
+                    self.conn.rollback()
+                else:
+                    self.conn.commit()
+            finally:
+                self.conn.close()
         return False
